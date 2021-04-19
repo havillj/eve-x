@@ -18,11 +18,15 @@ import sys
 import time
 import urllib.request as web
 
+from hits import Hit, Hits
+
 SPADES_EXEC = '/home/havill/bin/SPAdes-3.14.1-Linux/bin/spades.py'
 ROOT_DIR = '/home/havill/data/aegypti/analyzed/'
 RESULTS_DIR = '/home/havill/data2/results4/'
+GB_DIR = '/home/havill/data/aegypti/gb/'
 FAMILY_CSV = '/home/havill/data2/results/families.csv'
 LOGFILE_NAME = 'log.log'
+LOGFILE_PATH = Path(RESULTS_DIR) / LOGFILE_NAME
 MIN_PIDENT = 80
 EVALUE_V = 1e-10
 EVALUE_A = 1e-10
@@ -1111,7 +1115,7 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
     if not Path(outputDir).exists():
         os.mkdir(outputDir)
     else:
-        os.system('rm ' + outputDir + '*/*.png')
+        os.system('rm ' + outputDir + '/*/*.png')
         
     fams = readFamFile()
     
@@ -1365,8 +1369,10 @@ def copyResults():
         os.system('mkdir ' + SPECIMENS_DIR)
         
     dirList = [dir for dir in Path(ROOT_DIR).iterdir() if dir.is_dir() and 'combined' not in dir.name]
+    count = 0
     for dir in dirList:
-        writelog('Copying results from ' + dir.name, , True)
+        count += 1
+        writelog('Copying results from ' + dir.name + ' (' + str(count) + '/' + str(len(dirList)) + ')', True)
         if not Path(SPECIMENS_DIR + dir.name).exists():
             os.system('mkdir ' + SPECIMENS_DIR + dir.name)
             os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/xml')
@@ -1425,6 +1431,7 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
     allHits = []
     viralSeqs = {}
     refSeqs = {}
+    pIdents = {}
     
     xmlFiles = []
     specimensPath = Path(RESULTS_DIR + 'specimens/').resolve()
@@ -1451,6 +1458,7 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
             if bestHitsOnly and (contig.attrib['besthit'] != 'True'):
                 continue
                 
+            contigName = contig.attrib['name']
             hit = {}
             v = contig.find('virushit')
             seqid = v.attrib['seqid']            # should be same for all v
@@ -1462,13 +1470,19 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
             if (seqid, stitle) not in viralSeqs:
                 viralSeqs[(seqid, stitle)] = {}
                 refSeqs[(seqid, stitle)] = {}
+                pIdents[(seqid, stitle)] = {}
             if specimen not in viralSeqs[(seqid, stitle)]:
                 viralSeqs[(seqid, stitle)][specimen] = {}
                 refSeqs[(seqid, stitle)][specimen] = {}
+                pIdents[(seqid, stitle)][specimen] = {}
+            viralSeqs[(seqid, stitle)][specimen][contigName] = {}
+            refSeqs[(seqid, stitle)][specimen][contigName] = {}
+            pIdents[(seqid, stitle)][specimen][contigName] = {}
             for v in contig.findall('virushit'):
                 hit[(int(v.find('qstart').text), int(v.find('qend').text))] = (int(v.find('sstart').text), int(v.find('send').text))
-                viralSeqs[(seqid, stitle)][specimen][(int(v.find('sstart').text), int(v.find('send').text))] = v.find('qseq').text
-                refSeqs[(seqid, stitle)][specimen][(int(v.find('sstart').text), int(v.find('send').text))] = v.find('sseq').text
+                viralSeqs[(seqid, stitle)][specimen][contigName][(int(v.find('sstart').text), int(v.find('send').text))] = v.find('qseq').text
+                refSeqs[(seqid, stitle)][specimen][contigName][(int(v.find('sstart').text), int(v.find('send').text))] = v.find('sseq').text
+                pIdents[(seqid, stitle)][specimen][contigName][(int(v.find('sstart').text), int(v.find('send').text))] = float(v.find('pident').text)
                 virus_fasta.write('>' + seqid + '_' + stitle.replace(' ', '-') + '_' + v.find('sstart').text + '-' + v.find('send').text + '_(host)\n')
                 virus_fasta.write(v.find('qseq').text + '\n')
                 virus_fasta.write('>' + seqid + '_' + stitle.replace(' ', '-') + '_' + v.find('sstart').text + '-' + v.find('send').text + '_(reference)\n')
@@ -1480,7 +1494,7 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
             sposString = ''
             revSeq = hit[qpos[0]][0] > hit[qpos[0]][1]  # reverse complement if first hit is reversed
             for qse in qpos:
-                combinedSeq += viralSeqs[(seqid, stitle)][specimen][hit[qse]].replace('-', '')  # remove gaps
+                combinedSeq += viralSeqs[(seqid, stitle)][specimen][contigName][hit[qse]].replace('-', '')  # remove gaps
                 if revSeq:
                     sposString = str(hit[qse][1]) + '-' + str(hit[qse][0]) + ',' + sposString
                 else:
@@ -1549,32 +1563,39 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
             fams[seqid] = fam
             addFamily(seqid, fam)
         for specimen in viralSeqs[(seqid, stitle)]:
-            newDict = {}
-            newDictRef = {}
-            for (start, end) in viralSeqs[(seqid, stitle)][specimen]:
-                if start > end:
-                    newDict[(end, start)] = reverseComplement(viralSeqs[(seqid, stitle)][specimen][(start, end)])
-                    newDictRef[(end, start)] = reverseComplement(refSeqs[(seqid, stitle)][specimen][(start, end)])
-                else:
-                    newDict[(start, end)] = viralSeqs[(seqid, stitle)][specimen][(start, end)]
-                    newDictRef[(start, end)] = refSeqs[(seqid, stitle)][specimen][(start, end)]
-            viralSeqs[(seqid, stitle)][specimen] = newDict
-            refSeqs[(seqid, stitle)][specimen] = newDictRef
+            for contigName in viralSeqs[(seqid, stitle)][specimen]:
+                newDict = {}
+                newDictRef = {}
+                for (start, end) in viralSeqs[(seqid, stitle)][specimen][contigName]:
+                    if start > end:
+                        newDict[(end, start)] = reverseComplement(viralSeqs[(seqid, stitle)][specimen][contigName][(start, end)])
+                        newDictRef[(end, start)] = reverseComplement(refSeqs[(seqid, stitle)][specimen][contigName][(start, end)])
+                    else:
+                        newDict[(start, end)] = viralSeqs[(seqid, stitle)][specimen][contigName][(start, end)]
+                        newDictRef[(start, end)] = refSeqs[(seqid, stitle)][specimen][contigName][(start, end)]
+                viralSeqs[(seqid, stitle)][specimen][contigName] = newDict
+                refSeqs[(seqid, stitle)][specimen][contigName] = newDictRef
         
         refIndices = {}    # specimen seq at each reference index
+        positions = {}     # virus positions for fasta headers
         for specimen in viralSeqs[(seqid, stitle)]:
             refIndices[specimen] = {}
-            for (start, end) in viralSeqs[(seqid, stitle)][specimen]:
-                refIndex = start - 2  # -1 for 0-indexing, -1 for initial increment
-                seq = viralSeqs[(seqid, stitle)][specimen][(start, end)]
-                refSeq = refSeqs[(seqid, stitle)][specimen][(start, end)]
-                for index in range(len(seq)):
-                    if refSeq[index] != '-':
-                        refIndex += 1
-                        refIndices[specimen][refIndex] = seq[index]
-                    else:
-                        refIndices[specimen][refIndex] += seq[index]
-            viralSeqs[(seqid, stitle)][specimen] = ''
+            positions[specimen] = {}
+            for contigName in viralSeqs[(seqid, stitle)][specimen]:
+                refIndices[specimen][contigName] = {}
+                positions[specimen][contigName] = []
+                for (start, end) in viralSeqs[(seqid, stitle)][specimen][contigName]:
+                    refIndex = start - 2  # -1 for 0-indexing, -1 for initial increment
+                    seq = viralSeqs[(seqid, stitle)][specimen][contigName][(start, end)]
+                    refSeq = refSeqs[(seqid, stitle)][specimen][contigName][(start, end)]
+                    positions[specimen][contigName].append((start, end))
+                    for index in range(len(seq)):
+                        if refSeq[index] != '-':
+                            refIndex += 1
+                            refIndices[specimen][contigName][refIndex] = seq[index]
+                        else:
+                            refIndices[specimen][contigName][refIndex] += seq[index]
+                viralSeqs[(seqid, stitle)][specimen][contigName] = ''
                     
         referenceFilename = '/home/havill/data/aegypti/genomes/' + seqid + '.fasta'
         try:
@@ -1603,26 +1624,62 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
         referenceID = refRecord.id
         assert referenceID == seqid
         viralSeqs[(seqid, stitle)][referenceID] = ''
+        refIndicesBySpecimen = {}
+        viralSeqsBySpecimen = {}
+        for specimen in refIndices:
+            refIndicesBySpecimen[specimen] = {}
+            viralSeqsBySpecimen[specimen] = ''
+            for contigName in refIndices[specimen]:
+                for refIndex in refIndices[specimen][contigName]:
+                    refIndicesBySpecimen[specimen][refIndex] = refIndices[specimen][contigName][refIndex]
+        
         for refIndex in range(virusLength):
-            maxLength = max([len(refIndices[specimen].get(refIndex, '-')) for specimen in refIndices])
+            maxLength = max([len(refIndicesBySpecimen[specimen].get(refIndex, '-')) for specimen in refIndices])
             viralSeqs[(seqid, stitle)][referenceID] += '{0:-<{1}}'.format(referenceSeq[refIndex], maxLength)
             for specimen in refIndices:
-                viralSeqs[(seqid, stitle)][specimen] += '{0:-<{1}}'.format(refIndices[specimen].get(refIndex, ''), maxLength)
+                viralSeqsBySpecimen[specimen] += '{0:-<{1}}'.format(refIndicesBySpecimen[specimen].get(refIndex, ''), maxLength)
+                for contigName in refIndices[specimen]:
+                    viralSeqs[(seqid, stitle)][specimen][contigName] += '{0:-<{1}}'.format(refIndices[specimen][contigName].get(refIndex, ''), maxLength)
 
         FAMILY_DIR = SEQUENCES_DIR + fams[seqid]
         if not Path(FAMILY_DIR).exists():
             os.system('mkdir ' + FAMILY_DIR)
         
-        seqOut = open(str(Path(FAMILY_DIR) / ('sequences_' + seqid + '.fasta')), 'w')
+        seqOut = open(str(Path(FAMILY_DIR) / ('sequences_' + seqid + '_per_specimen_aligned.fasta')), 'w')
+        seqOutPerContig = open(str(Path(FAMILY_DIR) / ('sequences_' + seqid + '_per_contig_aligned.fasta')), 'w')
         sortedSpecimens = list(viralSeqs[(seqid, stitle)].keys())
         sortedSpecimens.remove(referenceID)
         sortedSpecimens.sort()
         seqOut.write('>' + referenceID + ' ' + stitle + '\n')
         seqOut.write(viralSeqs[(seqid, stitle)][referenceID] + '\n')
+        seqOutPerContig.write('>' + referenceID + ' ' + stitle + '\n')
+        seqOutPerContig.write(viralSeqs[(seqid, stitle)][referenceID] + '\n')
         for specimen in sortedSpecimens:
-            seqOut.write('>' + specimen + '\n')
-            seqOut.write(viralSeqs[(seqid, stitle)][specimen] + '\n')
+            region, num = getSpecimenLabel(specimen)
+            region = region.replace(' ', '_')
+            posSpecimen = []
+            for contigName in positions[specimen]:
+                posSpecimen.extend(positions[specimen][contigName])
+            posSpecimen.sort()
+            posString = ''
+            for start, end in posSpecimen:
+                posString += str(start) + '-' + str(end) + ','
+                
+            # compute weighted pident and add to headers
+                
+            seqOut.write('>' + region + '_' + str(num) + '_' + posString[:-1] + '\n')
+            seqOut.write(viralSeqsBySpecimen[specimen] + '\n')
+            contigCount = 1
+            for contigName in viralSeqs[(seqid, stitle)][specimen]:
+                positions[specimen][contigName].sort()
+                posString = ''
+                for start, end in positions[specimen][contigName]:
+                    posString += str(start) + '-' + str(end) + ','
+                seqOutPerContig.write('>' + region + '_' + str(num) + '__contig' + str(contigCount) + '_' + posString[:-1] + '\n')
+                seqOutPerContig.write(viralSeqs[(seqid, stitle)][specimen][contigName] + '\n')
+                contigCount += 1
         seqOut.close()
+        seqOutPerContig.close()
 #
     out = open(str(Path(RESULTS_DIR) / ('results_' + virusName + '.tsv')), 'w')
     
@@ -1674,13 +1731,15 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
     specimenLabelsList.sort()
     for region, num in specimenLabelsList:
         specimen = specimenLabels[(region, num)]
-        out.write(region + ' ' + num + '\t')
+        out.write(region + ' ' + str(num) + '\t')
         for stitle, seqid in allViruses:
             length = 0
 #            rangeString = ''
             rangeList = []
             for hit in viralHits[specimen]:  # hit = (seqid, stitle, hitDict) in one contig
                 if hit[0] == seqid:
+                    if omitInReference and (specimen in viralHits0) and (hit in viralHits0[specimen]):  # overlapping vector hit
+                        continue
                     hitDict = hit[2]
                     qpos = list(hitDict.keys())
                     qpos.sort()                  # within hit, sort by qstart
@@ -1692,10 +1751,7 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
                     if s[0] > s[-1]:
                         s = s[::-1]
                     if (specimen in viralHits0) and (hit in viralHits0[specimen]):  # overlapping vector hit
-                        if omitInReference:
-                            continue
-                        else:
-                            s.append(3)
+                        s.append(3)
                     elif (specimen in viralHits2) and (hit in viralHits2[specimen]):
                         s.append(2)
                     elif (specimen in viralHits1) and (hit in viralHits1[specimen]):
@@ -1752,21 +1808,21 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
     out.close()   
 
 ###############################################################################
-
-populations = {'Angola': ['Angola'], 
-               'Argentina': ['Argentina', 'US_U'], 
-               'Australia': ['Australia'], 
-               'Brazil': ['Brazil'], 
-               'French Polynesia': ['FrenchPolynesia'],
-               'Gabon': ['Gabon'], 
-               'Mexico': ['Mexico'], 
-               'Philippines': ['Philippines'], 
-               'South Africa': ['South_Africa'], 
-               'Thailand': ['Thailand'], 
-               'USA': ['USA', 'AZ'], 
-               'Vietnam': ['Vietnam']}
                
 def getSpecimenLabel(specimen):
+    populations = {'Angola': ['Angola'], 
+                   'Argentina': ['Argentina', 'US_U'], 
+                   'Australia': ['Australia'], 
+                   'Brazil': ['Brazil'], 
+                   'French Polynesia': ['FrenchPolynesia'],
+                   'Gabon': ['Gabon'], 
+                   'Mexico': ['Mexico'], 
+                   'Philippines': ['Philippines'], 
+                   'South Africa': ['South_Africa'], 
+                   'Thailand': ['Thailand'], 
+                    'USA': ['USA', 'AZ'], 
+                   'Vietnam': ['Vietnam']}
+               
     region = 'Unknown'
     for popName in populations:
         for pattern in populations[popName]:
@@ -1791,82 +1847,6 @@ AaegL5_hits = {'NC_001564.2': [9330, 8303],   # Cell fusing agent virus
                'NC_040669.1': [6773, 7497],   # Riverside virus 1
                'NC_025384.1': [6789, 6267]}   # Culex tritaeniorhynchus rhabdovirus
                
-class Hit:
-    def __init__(self, pos = [], overlap = False, primary = True, data = None):
-        self._pos = pos
-        self._overlap = overlap
-        self._primary = primary
-        self._data = data
-        
-    def doesOverlap(self):
-        return self._overlap
-        
-    def isPrimary(self):
-        return self._primary
-        
-    def getData(self):
-        return self._data
-        
-    def getPos(self):
-        return self._pos
-        
-    def __len__(self):
-        return len(self._pos)
-        
-    def __getitem__(self, index):
-        return self._pos[index]
-        
-    def __contains__(self, interval):
-        try:
-            iterator = iter(interval)
-        except TypeError:
-            start = end = interval
-        else:
-            start, end = interval
-            if start > end:
-                start, end = end, start
-                
-        for index in range(0, len(self._pos), 2):
-            if (self._pos[index] <= self._pos[index + 1]) and ((start >= self._pos[index]) and (end <= self._pos[index + 1])):
-                return True
-            elif (self._pos[index] > self._pos[index + 1]) and ((start <= self._pos[index]) and (end >= self._pos[index + 1])):
-                return True
-        return False
-        
-class Hits:
-    def __init__(self):
-        self._hits = []   # list of hits
-        
-    def addHit(self, pos, overlap = False, primary = True, data = None):
-        self._hits.append(Hit(pos, overlap, primary, data))
-        
-    def addHits(self, otherHitsList):
-        self._hits.extend(otherHitsList)
-        
-    def getHits(self):
-        return self._hits
-        
-    def getPrimaryHitsOnly(self):
-        primaryHits = []
-        for hit in self._hits:
-            if hit.isPrimary():
-                primaryHits.append(hit)
-        return primaryHits
-        
-    def adjust(self, adjustment):
-        for index in range(len(self._hits)):
-            for index2 in range(len(self._hits[index]._pos)):
-                self._hits[index]._pos[index2] += adjustment
-                
-    def __contains__(self, interval):
-        for hit in self._hits:
-            if interval in hit:
-                return True
-        return False
-                
-    def __len__(self):
-        return len(self._hits)
-
 def getGenBank(accessionID):
 	"""
 	Query NCBI to get a gb file.
@@ -1884,6 +1864,31 @@ def getGenBank(accessionID):
 	gbFile.close()
 	
 	return True
+	
+class MyCustomTranslator(BiopythonTranslator):
+    def compute_feature_color(self, feature):
+        if 'UTR' in feature.type:
+            return "red"
+        elif feature.type in ["mat_peptide", "CDS"]:
+            return "gold"
+        else:
+            return "blue"
+
+    def compute_feature_label(self, feature):
+        if feature.type == "mat_peptide":
+            return feature.qualifiers['product'][0]
+        elif feature.type == "CDS":
+            return feature.qualifiers['product'][0]
+        else:
+            return BiopythonTranslator.compute_feature_label(self, feature)
+
+    def compute_filtered_features(self, features):
+        filtered_features1 = [feature for feature in features if feature.type not in ('source', 'gene')]
+        
+        if len(filtered_features1) <= 4:
+            return filtered_features1
+        else:
+            return [feature for feature in filtered_features1 if 'product' not in feature.qualifiers or feature.qualifiers['product'][0] != 'polyprotein']
 
 def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL5_hits, showPlot, small, omitInReference):    
 
@@ -2050,7 +2055,7 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL
                 start = min(max(feature.start, 1), virusRecord.sequence_length - 1)
                 end = min(feature.end, virusRecord.sequence_length - 1)
                 for i in range(min(start, end), max(start, end) + 1):
-                y[i-1] += 1
+                    y[i-1] += 1
                     
         for feature in AaegL5_features:
             start = feature.start
@@ -2114,7 +2119,7 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL
         fig.savefig(Path(FAMILY_DIR) / figName)
         pyplot.close(fig)
 
-def getHits(omitInReference = True):
+def getHitsForDiagram(omitInReference = True):
     dir = Path(RESULTS_DIR + 'specimens/')
     subdirs = [d for d in dir.iterdir()]
     files = [d / ('xml/' + d.name + '_all_hits_features.xml') for d in subdirs ]
@@ -2159,7 +2164,7 @@ def getHits(omitInReference = True):
     return allVirusHits, allSpecimens
 
 def drawFamily(families, famACCs, separatePops, showAaegL5_hits, showPlot, small, omitInReference):
-    allVirusHits, allSpecimens = getHits(omitInReference)
+    allVirusHits, allSpecimens = getHitsForDiagram(omitInReference)
         
     if famACCs is None:
         fams = readFamFile()
@@ -2199,7 +2204,7 @@ def drawFamily(families, famACCs, separatePops, showAaegL5_hits, showPlot, small
         famACCs = None
     
 def drawAll(separatePops, omitInReference):
-    allVirusHits, allSpecimens = getHits(omitInReference)
+    allVirusHits, allSpecimens = getHitsForDiagram(omitInReference)
     
     fams = readFamFile()
 
@@ -2332,23 +2337,16 @@ def doAllParallel2():
     os.system('cp ' + ROOT_DIR + '/*/spades_all/*all_hits.xml ' + str(Path(ROOT).parent) + '/results/HITS_all')
     consolidateAll(str(Path(ROOT_DIR).parent) + '/results/HITS_all', 'all')
 
-logFile = ''
+logFile = open(LOGFILE_PATH, 'a')
 
 def writelog(message, alsoPrint = False):
     logFile.write(message + '\n')
     if alsoPrint:
-        writelog(message)
-
-def setup():
-    global logFile
-    
-    logFilePath = Path(RESULTS_DIR) / LOGFILE_NAME
-    logFile = open(logFilePath, 'a')
-    writelog('\n************************************************')
-    writelog('Starting pipeline at ' + time.strftime('%c'))
+        print(message)
 
 def main():
-    setup()
+    writelog('\n************************************************')
+    writelog('Starting pipeline at ' + time.strftime('%c'))
     
     doAll()
 
@@ -2356,9 +2354,11 @@ def main():
         consolidateAll('all', True, True)
         drawAll(False, False)
         drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)
-
     
-main()
+#main()
 #doAll()
 #consolidateAll('all', True, True)
 #xmlFilename = getHits(str(Path(ROOT_DIR + 'Cuanda_Angola_02.LIN210A1720')), 'all', 100, EVALUE_A)  #3 = get hits
+consolidateAll('all', True, True)
+#drawAll(False, False)
+#drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)

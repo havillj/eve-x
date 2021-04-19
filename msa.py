@@ -152,69 +152,78 @@ def makeHeatMap(values, xlabels, ylabels, ids, boundsFile):
     ax[0].set_frame_on(False)
     
     kw = dict(horizontalalignment="center", verticalalignment="center", fontsize=6, color='black')
-    bfile = open(boundsFile, 'r')
-    i = 1
-    for line in bfile:
-        cols = line.rstrip().split(',')
-        left = int(cols[1])
-        right = int(cols[1]) + int(cols[2]) - 1
-        for j in range(left, right + 1):
-            if not np.array_equal(values[i,j], [1., 1., 1.]):
-                im.axes.text(j, i, '+', **kw)
-        i += 1
-    bfile.close()
+    try:
+        bfile = open(boundsFile, 'r')
+    except:
+        pass
+    else:
+        i = 1
+        for line in bfile:
+            cols = line.rstrip().split(',')
+            left = int(cols[1])
+            right = int(cols[1]) + int(cols[2]) - 1
+            for j in range(left, right + 1):
+                if not np.array_equal(values[i,j], [1., 1., 1.]):
+                    im.axes.text(j, i, '+', **kw)
+            i += 1
+        bfile.close()
         
 #    im = heatmap(values, ylabels, xlabels, ax=ax, cmap="Blues", cbarlabel="")
 #    texts = annotate_heatmap(im, valfmt="{x:.2f}", fontsize=8)
     
 #    fig.tight_layout()
-    fig.savefig('msa.png', dpi=200)
+    return fig
 
 
 d = {'A': (0., 0., 1.), 'C': (1., 0., 0.), 'G': (0., 1., 0.), 'T': (1., 1., 0.)}
-table1 = []
-table2 = []
-table3 = []
-ylabels = []
-records = SeqIO.index('/home/havill/data2/ortho_flanks.fasta', 'fasta')
-for id in records:
-    if 'MF176251.1' in id:
-        refseq = str(records[id].seq)
-        break
-ids = np.zeros(len(refseq))
-totals = np.zeros(len(refseq))
-for seqid in records:
-    ylabels.append(seqid)
-    row1 = []
-    row2 = []
-    row3 = []
-    index = 0
-    for char in str(records[seqid].seq).upper():
-        row1.append(d.get(char, (1., 1., 1.))[0])
-        row2.append(d.get(char, (1., 1., 1.))[1])
-        row3.append(d.get(char, (1., 1., 1.))[2])
-        if seqid != 'MF176251.1':
-            if char != '-':
-                if char == refseq[index]:
-                    ids[index] += 1
-                totals[index] += 1
-        index += 1
-    table1.append(row1)
-    table2.append(row2)
-    table3.append(row3)
+
+def drawMSA(fileName, refID, boundsFile):
+    table1 = []
+    table2 = []
+    table3 = []
+    ylabels = []
+    records = SeqIO.index(fileName, 'fasta')
+    for id in records:
+        if refID in id:
+            refseq = str(records[id].seq)
+            break
+    ids = np.zeros(len(refseq))
+    totals = np.zeros(len(refseq))
+    for seqid in records:
+        ylabels.append(seqid)
+        row1 = []
+        row2 = []
+        row3 = []
+        index = 0
+        for char in str(records[seqid].seq).upper():
+            row1.append(d.get(char, (1., 1., 1.))[0])
+            row2.append(d.get(char, (1., 1., 1.))[1])
+            row3.append(d.get(char, (1., 1., 1.))[2])
+            if seqid != refID:
+                if char != '-':
+                    if char == refseq[index]:
+                        ids[index] += 1
+                    totals[index] += 1
+            index += 1
+        table1.append(row1)
+        table2.append(row2)
+        table3.append(row3)
     
-ids /= totals
+    ids /= totals
 
-# pyplot.rcParams.update({
-#     "text.usetex": True,
-#     "font.family": "serif",
-#     "font.serif": ["Computer Modern Roman"],
-#     "font.sans-serif": ["Computer Modern Sans serif"]})
-# #     
-# # ##Needed to install additional latex packages under ubuntu:
-# # ##sudo apt-get install dvipng texlive-latex-extra texlive-fonts-recommended cm-super
-# # 
-values = np.dstack([table1, table2, table3])
-#print(values)
-makeHeatMap(values, [], ylabels, ids, '/home/havill/data2/ortho_flanks.csv')
+    # pyplot.rcParams.update({
+    #     "text.usetex": True,
+    #     "font.family": "serif",
+    #     "font.serif": ["Computer Modern Roman"],
+    #     "font.sans-serif": ["Computer Modern Sans serif"]})
+    # #     
+    # # ##Needed to install additional latex packages under ubuntu:
+    # # ##sudo apt-get install dvipng texlive-latex-extra texlive-fonts-recommended cm-super
+    # # 
+    values = np.dstack([table1, table2, table3])
+    #print(values)
+    fig = makeHeatMap(values, [], ylabels, ids, boundsFile)
+    fig.savefig(fileName.split('.fasta')[0] + '_msa.png', dpi=200)
 
+if __name__ == '__main__':
+    drawMSA('/home/havill/data2/ortho_flanks.fasta', 'MF176251.1', '/home/havill/data2/ortho_flanks.csv')

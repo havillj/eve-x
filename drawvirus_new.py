@@ -71,6 +71,8 @@ def drawFromFile(fileName, virusName):
     
 #drawFromFile('flav.tsv', 'xishuangbanna')
 
+###############################################################################
+
 def drawEVEs(EVEs, openEnds, virusName, title):
 
     width = 10
@@ -128,10 +130,11 @@ def drawEVEs(EVEs, openEnds, virusName, title):
 # drawEVEs(ORTH_EVEs, openEnds, 'MF176251.1', 'ORTH EVEs')
 # exit()
 
+###############################################################################
+
 # code from https://matplotlib.org/stable/gallery/images_contours_and_fields/image_annotated_heatmap.html
     
-def heatmap(data, row_labels, col_labels, ax=None,
-            cbar_kw={}, cbarlabel="", **kwargs):
+def heatmap(data, row_labels, col_labels, ax=None, cbar_kw={}, cbarlabel="", **kwargs):
     """
     Create a heatmap from a numpy array and two lists of labels.
 
@@ -190,10 +193,7 @@ def heatmap(data, row_labels, col_labels, ax=None,
 
     return im, cbar
 
-
-def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
-                     textcolors=("black", "white"),
-                     threshold=None, **textkw):
+def annotate_heatmap(im, data=None, valfmt="{x:.2f}", textcolors=("black", "white"), threshold=None, **textkw):
     """
     A function to annotate a heatmap.
 
@@ -362,544 +362,8 @@ def readPopCSV(fileName):
 # makeHeatMap(eves_xin, xlabels, ylabels)
 # exit()
 
-from Bio.Phylo.TreeConstruction import DistanceCalculator
-from Bio import AlignIO
-from Bio.Phylo.TreeConstruction import DistanceTreeConstructor
-from Bio import Phylo
+###############################################################################
 
-
-def drawTree(fileName):
-    aln = AlignIO.read(fileName, 'fasta') # Bio.Align.MultipleSeqAlignment object
-    aln = aln[1:]
-    calculator = DistanceCalculator('identity')
-#    dm = calculator.get_distance(aln)
-    constructor = DistanceTreeConstructor(calculator, 'nj')
-    tree = constructor.build_tree(aln)
-    fig = pyplot.figure(figsize=(10, 20), dpi=100)
-    axes = fig.add_subplot(1, 1, 1)
-    matplotlib.rc('font', size=6)
-    Phylo.draw(tree, axes=axes)
-    pyplot.savefig('tree.pdf')
-    
-#drawTree('/home/havill/data2/results4/viruses/sequences/Flaviviridae/sequences_NC_001564.2.fasta')
-#exit()
-
-populations = {'Angola': ['Angola'], 
-               'Argentina': ['Argentina', 'US_U'], 
-               'Australia': ['Australia'], 
-               'Brazil': ['Brazil'], 
-               'French Polynesia': ['FrenchPolynesia'],
-               'Gabon': ['Gabon'], 
-               'Mexico': ['Mexico'], 
-               'Philippines': ['Philippines'], 
-               'South Africa': ['South_Africa'], 
-               'Thailand': ['Thailand'], 
-               'USA': ['USA', 'AZ'], 
-               'Vietnam': ['Vietnam']}
-               
-AaegL5_hits = {'NC_001564.2': [9330, 8303],   # Cell fusing agent virus
-               'NC_034017.1': [1677, 839, 2269, 3801, 5188, 6416, 7537, 8296, 10083, 8327],  # Xishuangbanna aedes flavivirus
-               'NC_038512.1': [2579, 3877],   # Trichoplusia ni TED virus
-               'NC_035674.1': [446, 3299],    # Australian Anopheles totivirus
-               'NC_035132.1': [6568, 7294],   # Culex ohlsrhavirus
-               'NC_028484.1': [6555, 7282],   # Tongilchon ohlsrhavirus
-               'NC_040669.1': [6773, 7497],   # Riverside virus 1
-               'NC_025384.1': [6789, 6267]}   # Culex tritaeniorhynchus rhabdovirus
-               
-class Hit:
-    def __init__(self, pos = [], overlap = False, primary = True, data = None):
-        self._pos = pos
-        self._overlap = overlap
-        self._primary = primary
-        self._data = data
-        
-    def doesOverlap(self):
-        return self._overlap
-        
-    def isPrimary(self):
-        return self._primary
-        
-    def getData(self):
-        return self._data
-        
-    def getPos(self):
-        return self._pos
-        
-    def __len__(self):
-        return len(self._pos)
-        
-    def __getitem__(self, index):
-        return self._pos[index]
-        
-    def __contains__(self, interval):
-        try:
-            iterator = iter(interval)
-        except TypeError:
-            start = end = interval
-        else:
-            start, end = interval
-            if start > end:
-                start, end = end, start
-                
-        for index in range(0, len(self._pos), 2):
-            if (self._pos[index] <= self._pos[index + 1]) and ((start >= self._pos[index]) and (end <= self._pos[index + 1])):
-                return True
-            elif (self._pos[index] > self._pos[index + 1]) and ((start <= self._pos[index]) and (end >= self._pos[index + 1])):
-                return True
-        return False
-        
-#    def __setitem__(self, index, value)
-        
-#    def __iadd__(self, other)
-        
-class Hits:
-    def __init__(self):
-        self._hits = []   # list of hits
-        
-    def addHit(self, pos, overlap = False, primary = True, data = None):
-        self._hits.append(Hit(pos, overlap, primary, data))
-        
-    def addHits(self, otherHitsList):
-        self._hits.extend(otherHitsList)
-        
-    def getHits(self):
-        return self._hits
-        
-    def getPrimaryHitsOnly(self):
-        primaryHits = []
-        for hit in self._hits:
-            if hit.isPrimary():
-                primaryHits.append(hit)
-        return primaryHits
-        
-    def adjust(self, adjustment):
-        for index in range(len(self._hits)):
-            for index2 in range(len(self._hits[index]._pos)):
-                self._hits[index]._pos[index2] += adjustment
-                
-    def __contains__(self, interval):
-        for hit in self._hits:
-            if interval in hit:
-                return True
-        return False
-                
-    def __len__(self):
-        return len(self._hits)
-            
-#    def __iadd__(self, other)
-        
-# class Hits:
-#     def __init__(self):
-#         self._hits = []   # list of lists
-#         self._overlaps = []
-#         
-#     def addHit(self, hit, overlap = False):
-#         self._hits.append(hit)
-#         self._overlaps.append(overlap)
-#         
-#     def getHits(self):
-#         return self._hits, self._overlaps
-
-def getGenBank(accessionID):
-	"""
-	Query NCBI to get a gb file.
-	"""
-	
-	Entrez.email = 'havill@denison.edu'
-	try:
-		handle = Entrez.efetch(db = 'nucleotide', id = accessionID, rettype = 'gb', retmode = 'text')
-	except:
-		print('Error retrieving GenBank record for ' + accessionID + ': ' + sys.exc_info()[1] + '\nDiagram not created.')
-		return False
-		
-	gbFile = open(GB_DIR + accessionID + '.gb', 'w')
-	gbFile.write(handle.read())
-	gbFile.close()
-	
-	return True
-
-def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL5_hits, showPlot, small, omitInReference):    
-
-#    hits = getHits(acc)
-
-    VIRUSES_DIR = RESULTS_DIR + 'viruses/'
-    if not Path(VIRUSES_DIR).exists():
-        os.system('mkdir ' + VIRUSES_DIR)
-    DIAGRAMS_DIR = VIRUSES_DIR + 'diagrams/'
-    if not Path(DIAGRAMS_DIR).exists():
-        os.system('mkdir ' + DIAGRAMS_DIR)
-    FAMILY_DIR = DIAGRAMS_DIR + family
-    if not Path(FAMILY_DIR).exists():
-        os.system('mkdir ' + FAMILY_DIR)
-    
-#     if not Path(outputDir).exists():
-#         os.mkdir(outputDir)
-
-    if small:
-        width = 3
-        thickness = 1
-        ref_thickness = 2
-        fontsize = 1
-        plot_linewidth = 0.25 # 0.75
-        draw_line = False
-        with_ruler = False
-    #   ax.xaxis.set_tick_params(width=5)
-    else:
-        width = 10
-        thickness = 10
-        fontsize = 8
-        ref_thickness = 10
-        plot_linewidth = 0.75
-        draw_line = True
-        with_ruler = True
-
-    
-    if not Path(GB_DIR + acc + '.gb').exists():
-        if not getGenBank(acc):
-            return
-    virusRecord = MyCustomTranslator().translate_record(GB_DIR + acc + '.gb')  # GraphicRecord
-#    virusRecord.plots_indexing = 'genbank'  # start at 1
-    codingStart = 1
-    codingEnd = virusRecord.sequence_length
-    for f in virusRecord.features:
-        f.thickness = ref_thickness
-        f.linewidth = 0
-        f.fontdict = {'size': fontsize}
-        if 'UTR' in f.label:
-            if '5' in f.label:
-                codingStart = f.end + 1
-            elif '3' in f.label:
-                codingEnd = f.start   # starts are actual start - 1 for some reason
-                
-    virusRecord2 = SeqIO.read('/home/havill/data/aegypti/gb/' + acc + '.gb', 'gb')  # SeqRecord
-    if isFamily:
-        virusName = 'Family ' + family + ' (' + virusRecord2.id + ': ' + virusRecord2.description[:80]
-        if len(virusRecord2.description) > 80:
-            virusName += '...'
-        virusName += ')'
-        print('Creating diagram' + 's' * separatePops + ' for family ' + family + ' (using representative ' + virusRecord2.id + ')...')
-    else:
-        virusName = virusRecord2.id + ': ' + virusRecord2.description[:80]
-        if len(virusRecord2.description) > 80:
-            virusName += '...'
-        virusName += ' (' + family + ')'
-        print('Creating diagram' + 's' * separatePops + ' for ' + virusName + '...')
-                
-    features = {}
-    for specimen in allSpecimens:
-        features[specimen] = []
-        if specimen in hits:
-            g = 1.0
-            for hit in hits[specimen].getHits():
-                if hit.isPrimary():
-                    transparency = 0.75  # so overlap can be seen
-                else:
-                    transparency = 0.25
-                if len(hit) == 2:
-                    color = (0, 0, 1) + (transparency,) # blue
-                else:
-                    color = (g, 0, 0) + (transparency,) # red
-                    g = max(g - 0.25, 0)
-#                 if hit.doesOverlap():
-#                     lc = (1, 1, 1) + (transparency,)    # white
-#                 else:
-                lc = (0, 0, 0, 0)
-                for index in range(0, len(hit), 2):
-                    start = hit[index]
-                    end = hit[index + 1]
-                    features[specimen].append(GraphicFeature(start=start, end=end, strand=1, color=color, label = None, thickness = thickness, linewidth = 0, linecolor = lc))
-                if hit.getData() != []:  # add reference overlap regions
-                    lc = (1, 1, 1) + (transparency,)    # white
-                    for start, end in hit.getData():
-                        features[specimen].append(GraphicFeature(start=start, end=end, strand=1, color=color, label = None, thickness = thickness, linewidth = 1, linecolor = lc))
-
-            
-#     for specimen in hits2:
-#         g = 1.0
-#         for hit in hits2[specimen].getHits():
-#             if len(hit) == 2:
-#                 color = (0, 0, 1, 0.25)   # translucent blue
-#             else:
-#                 color = (g, 0, 0, 0.25)   # translucent red
-#                 g = g - 0.25
-#             if hit.doesOverlap():
-#                 lc = (1, 1, 1, 0.25)      # white
-#             else:
-#                 lc = (0, 0, 0, 0)
-#             for index in range(0, len(hit), 2):
-#                 start = hit[index]
-#                 end = hit[index + 1]
-#                 features[specimen].append(GraphicFeature(start=start, end=end, strand=1, color=color, label = None, thickness = thickness, linewidth = 0, linecolor = lc))
-        
-    newFeatures = {}
-    for specimen in features:
-        for popName in populations:
-            for pattern in populations[popName]:
-                if pattern in specimen:
-                    region = popName
-                    break
-        p = re.compile(r'[0-9]+')
-        num = int(p.findall(specimen)[0])
-        newFeatures[(region, num)] = features[specimen]
-        
-    pops = ['all']
-    if separatePops:
-        pops.extend(list(populations.keys()))
-        
-    for pop in pops:
-        if pop == 'all':
-            specimens = list(newFeatures.keys())
-        else:
-            specimens = [specimen for specimen in newFeatures if specimen[0] == pop]
-        specimens.sort()
-        
-        height = (6 * thickness / 225) * (len(specimens) + 3)
-        
-        numAxes = len(specimens) + 2
-        if showPlot:
-            numAxes +=1
-        if showAaegL5_hits and (acc in AaegL5_hits):
-            numAxes += 1
-            
-        height = (6 * thickness / 225) * numAxes
-        
-        fig, ax = pyplot.subplots(numAxes, 1, sharex = False, sharey = False, figsize = (width, height), gridspec_kw = {'height_ratios': [4] + [1] * (numAxes - 1)})
-        fig.subplots_adjust(top = 0.99, bottom = 0.01, left = 0.18, right = 0.95)
-        fig.suptitle(virusName, fontsize = fontsize, fontweight = 'bold', y = 0.995)
-        
-        virusRecord.box_linewidth = 0
-        virusRecord.plot(ax = ax[0], figure_width=width, draw_line = draw_line, with_ruler = with_ruler, max_line_length = 30, max_label_length = 30) # prevent multiline labels
-        x0, y0, w, h = ax[0].get_position().bounds
-        ax[0].set_position([x0, y0+h*0.2, w, h])
-        ax[0].tick_params(labelsize = fontsize)
-        xlims = ax[0].get_xlim()
-        
-        AaegL5_features = []
-        if acc in AaegL5_hits:
-            for index in range(0, len(AaegL5_hits[acc]), 2):
-                start = AaegL5_hits[acc][index]
-                end = AaegL5_hits[acc][index + 1]
-                AaegL5_features.append(GraphicFeature(start=start, end=end, strand=0, color='lightgray', label = None, thickness = thickness, linewidth = 0))
-    
-        x = range(virusRecord.sequence_length)
-        y = [0] * virusRecord.sequence_length
-        
-        for specimen in specimens:
-            for feature in newFeatures[specimen]:
-                start = min(max(feature.start, 1), virusRecord.sequence_length - 1)
-                end = min(feature.end, virusRecord.sequence_length - 1)
-                for i in range(min(start, end), max(start, end) + 1):
-                    try:
-                        y[i-1] += 1
-                    except IndexError:
-                        print(i, virusRecord.sequence_length - 1)
-                        return
-                    
-        for feature in AaegL5_features:
-            start = feature.start
-            end = feature.end
-            for i in range(min(start, end), max(start, end) + 1):
-                y[i-1] += 1
-                
-        axisIndex = 1
-        y = [y[i] / len(specimens) for i in range(len(y))]
-        if showPlot:
-            ax[1].plot(x, y, color = 'blue', linewidth = plot_linewidth)
-            ax[1].set_xlim(*xlims)
-            ax[1].set_ylim(0, 2)
-            ax[1].axis('off')
-            ax[1].set_frame_on(False)
-            axisIndex += 1
-    
-        y = [y[i] > 0 for i in range(len(y))]
-        ax[axisIndex].bar(x, y, color = 'blue')
-        ax[axisIndex].set_xlim(*xlims)
-        ax[axisIndex].set_ylim(0, 2)
-        ax[axisIndex].axis('off')
-        ax[axisIndex].set_frame_on(False)
-        coverage = (sum(y[codingStart-1:codingEnd]) / (codingEnd - codingStart + 1)) * 100
-        ax[axisIndex].text(virusRecord.sequence_length, -0.1, '{0:4.1f}%'.format(coverage) + ' ', horizontalalignment = 'left', fontdict = {'size': fontsize})
-    
-        axisIndex += 1
-        if showAaegL5_hits and (acc in AaegL5_hits):
-            record = GraphicRecord(features = AaegL5_features, sequence_length = virusRecord.sequence_length, feature_level_height = 0)
-            record.plot(ax = ax[axisIndex], figure_width=width, with_ruler = False, draw_line = draw_line)
-            
-            start, end = record.span
-            plot_start, plot_end = start - 0.8, end - 0.2
-            ax[axisIndex].plot([plot_start, plot_end], [0, 0], linewidth = 0.25, zorder=-1000, c="k")
-            
-            ax[axisIndex].text(0, -0.1, 'AaegL5 ', horizontalalignment = 'right', fontdict = {'size': fontsize})
-            axisIndex += 1
-       
-        for specimen in specimens:
-            specimenName = specimen[0] + ' ' + str(specimen[1])
-#            print(specimenName)
-            record = GraphicRecord(features = newFeatures[specimen], sequence_length = virusRecord.sequence_length, feature_level_height = 0)
-            record.plot(ax = ax[axisIndex], figure_width=width, with_ruler = False, draw_line = draw_line)
-            
-            start, end = record.span
-            plot_start, plot_end = start - 0.8, end - 0.2
-            ax[axisIndex].plot([plot_start, plot_end], [0, 0], linewidth = 0.25, zorder=-1000, c="k")
-            
-            ax[axisIndex].text(0, -0.1, specimenName + ' ', horizontalalignment = 'right', fontdict = {'size': fontsize})
-            
-            for p in ax[axisIndex].patches:
-                if p.get_edgecolor()[:3] == (1, 1, 1):  # white
-                    p.set_hatch('////')
-                    
-            
-            axisIndex += 1
-        if isFamily:
-            figName = family + '_' + pop + '.pdf'
-        else:
-            figName = acc + '_' + pop + '.pdf'
-        fig.savefig(Path(FAMILY_DIR) / figName)
-        pyplot.close(fig)
-
-# def getHits_old(acc):
-#     """Return all hits for given accession number as a dictionary
-#        with key = specimen and value = [start, end, start, end, ...]"""
-#        
-#     resultsFile = open(RESULTS_DIR + 'results_all.tsv', 'r')
-#     header1 = resultsFile.readline()
-#     header2 = resultsFile.readline()
-#     accs = header1.split('\t')
-#     index = accs.index(acc)
-#     p = re.compile(r'[0-9]+-[0-9]+')
-#     allHits = {}
-#     for line in resultsFile:
-#         cols = line.rstrip().split('\t')
-#         specimen = cols[0]
-#         hits = cols[index]
-#         hits = p.findall(hits)
-#         allHits[specimen] = []
-#         for h in hits:
-#             pos = h.split('-')
-#             start = int(pos[0])
-#             end = int(pos[1])
-#             allHits[specimen].append([start, end])
-#     resultsFile.close()
-#     
-#     return allHits
-    
-# def getHits(acc):
-#     dir = Path(RESULTS_DIR + 'specimens/')
-#     subdirs = [d for d in dir.iterdir()]
-#     files = [d / ('xml/' + d.name + '_all_hits_features.xml') for d in subdirs ]
-#     files.sort()
-# 
-#     hits = {}
-#     hits2 = {}
-#     for file in files:
-#         specimen = file.name.rstrip('_all_hits_features.xml')
-#         print(specimen)
-#         hits[specimen] = Hits()
-#         hits2[specimen] = Hits()
-#         tree = ET.parse(str(file))
-#         root = tree.getroot()
-#         for contig in root:
-#             v = contig.find('virushit')  # first virus hit
-#             seqid = v.attrib['seqid']
-#             if '|' in seqid:
-#                 seqid = seqid.split('|')[1]
-#             if seqid == acc:
-#                 virushits = contig.findall('virushit')
-#                 hit = []
-#                 for virushit in virushits:
-#                     start = int(virushit.find('sstart').text)
-#                     end = int(virushit.find('send').text)
-#                     hit.extend([start, end])
-#                 overlap = len(contig.findall('vectorhitoverlap')) > 0
-#                 if (contig.attrib['besthit'] == 'True') and (len(virushits) < 5):
-#                     hits[specimen].addHit(hit, overlap)
-#                 else:
-#                     hits2[specimen].addHit(hit, overlap)
-#                     print('*', end='')
-#                 print(hit)
-#     return hits, hits2
-
-# def getHits(acc):
-#     dir = Path(RESULTS_DIR + 'specimens/')
-#     subdirs = [d for d in dir.iterdir()]
-#     files = [d / ('xml/' + d.name + '_all_hits_features.xml') for d in subdirs ]
-#     files.sort()
-# 
-#     hits = {}
-#     for file in files:
-#         specimen = file.name.rstrip('_all_hits_features.xml')
-#         print(specimen)
-#         hits[specimen] = Hits()
-#         tree = ET.parse(str(file))
-#         root = tree.getroot()
-#         for contig in root:
-#             v = contig.find('virushit')  # first virus hit
-#             seqid = v.attrib['seqid']
-#             if '|' in seqid:
-#                 seqid = seqid.split('|')[1]
-#             if seqid == acc:
-#                 virushits = contig.findall('virushit')
-#                 hit = []
-#                 for virushit in virushits:
-#                     start = int(virushit.find('sstart').text)
-#                     end = int(virushit.find('send').text)
-#                     hit.extend([start, end])
-#                 overlap = len(contig.findall('vectorhitoverlap')) > 0
-#                 if (contig.attrib['besthit'] == 'True'): # and (len(virushits) < 5):
-#                     hits[specimen].addHit(hit, overlap, True)
-#                 else:
-#                     hits[specimen].addHit(hit, overlap, False)
-#                     print('*', end='')
-#                 print(hit)
-#     return hits
-
-def getHits(omitInReference = True):
-    dir = Path(RESULTS_DIR + 'specimens/')
-    subdirs = [d for d in dir.iterdir()]
-    files = [d / ('xml/' + d.name + '_all_hits_features.xml') for d in subdirs ]
-    files.sort()
-
-    allVirusHits = {}
-    allSpecimens = []
-    for file in files:
-        specimen = file.name.rstrip('_all_hits_features.xml')
-        print(specimen)
-        allSpecimens.append(specimen)
-        tree = ET.parse(str(file))
-        root = tree.getroot()
-        for contig in root:
-            if 'inreference' in contig.attrib:
-                overlap = contig.attrib['inreference'] == 'True'
-            else:
-                overlap = False
-            if 'referenceoverlaps' in contig.attrib:
-                referenceOverlaps = eval(contig.attrib['referenceoverlaps'])
-            else:
-                referenceOverlaps = []
-            if omitInReference and overlap:
-                continue
-            virushits = contig.findall('virushit')
-            v = virushits[0]  # first virus hit
-            seqid = v.attrib['seqid']
-            if '|' in seqid:
-                seqid = seqid.split('|')[1]
-            if seqid not in allVirusHits:
-                allVirusHits[seqid] = {}
-            if specimen not in allVirusHits[seqid]:
-                allVirusHits[seqid][specimen] = Hits()
-
-            hit = []
-            for virushit in virushits:
-                start = int(virushit.find('sstart').text)
-                end = int(virushit.find('send').text)
-                hit.extend([start, end])
-            primary = contig.attrib['besthit'] == 'True'  # and (len(virushits) < 5):
-            allVirusHits[seqid][specimen].addHit(hit, overlap, primary, referenceOverlaps)
-#             if not primary:
-#                 print('*', end='')
-#             print(seqid, hit)
-    return allVirusHits, allSpecimens
-    
 def getHits1(virusACC):
     dir = Path(RESULTS_DIR + 'specimens/')
     subdirs = [d for d in dir.iterdir()]
@@ -936,7 +400,6 @@ def getHits1(virusACC):
                 primary = contig.attrib['besthit'] == 'True'  # and (len(virushits) < 5):
                 virusHits[specimen].addHit(hit, overlap, primary)
     return virusHits, allSpecimens
-
     
 def includesInterval(virusACC, interval):
     virusHits, allSpecimens = getHits1(virusACC)
@@ -1116,6 +579,9 @@ def getVirusSequences2(virusACC, vStart, vEnd, flankLength, outFileName, sort = 
     assert referenceID == virusACC
     referenceSeqAligned = ''
     
+    if vEnd is None:
+        vEnd = virusLength - 1
+    
     for refIndex in range(virusLength):
         maxLength = max([len(refIndices[(specimen, contigName)].get(refIndex, '-')) for (specimen, contigName) in refIndices])
         referenceSeqAligned += '{0:-<{1}}'.format(referenceSeq[refIndex], maxLength)
@@ -1190,7 +656,548 @@ def getVirusSequences2(virusACC, vStart, vEnd, flankLength, outFileName, sort = 
     outFile2.close()
     
 #getVirusSequences2('MF176251.1', 148, 966, 100, 'ortho_flanks', 'right')
+getVirusSequences2('NC_001564.2', 0, None, 0, 'cfav', 'left')
+exit()
+
+###############################################################################
+
+# from Bio.Phylo.TreeConstruction import DistanceCalculator
+# from Bio import AlignIO
+# from Bio.Phylo.TreeConstruction import DistanceTreeConstructor
+# from Bio import Phylo
+# 
+# 
+# def drawTree(fileName):
+#     aln = AlignIO.read(fileName, 'fasta') # Bio.Align.MultipleSeqAlignment object
+#     aln = aln[1:]
+#     calculator = DistanceCalculator('identity')
+# #    dm = calculator.get_distance(aln)
+#     constructor = DistanceTreeConstructor(calculator, 'nj')
+#     tree = constructor.build_tree(aln)
+#     fig = pyplot.figure(figsize=(10, 20), dpi=100)
+#     axes = fig.add_subplot(1, 1, 1)
+#     matplotlib.rc('font', size=6)
+#     Phylo.draw(tree, axes=axes)
+#     pyplot.savefig('tree.pdf')
+    
+#drawTree('/home/havill/data2/results4/viruses/sequences/Flaviviridae/sequences_NC_001564.2.fasta')
 #exit()
+
+# populations = {'Angola': ['Angola'], 
+#                'Argentina': ['Argentina', 'US_U'], 
+#                'Australia': ['Australia'], 
+#                'Brazil': ['Brazil'], 
+#                'French Polynesia': ['FrenchPolynesia'],
+#                'Gabon': ['Gabon'], 
+#                'Mexico': ['Mexico'], 
+#                'Philippines': ['Philippines'], 
+#                'South Africa': ['South_Africa'], 
+#                'Thailand': ['Thailand'], 
+#                'USA': ['USA', 'AZ'], 
+#                'Vietnam': ['Vietnam']}
+#                
+# AaegL5_hits = {'NC_001564.2': [9330, 8303],   # Cell fusing agent virus
+#                'NC_034017.1': [1677, 839, 2269, 3801, 5188, 6416, 7537, 8296, 10083, 8327],  # Xishuangbanna aedes flavivirus
+#                'NC_038512.1': [2579, 3877],   # Trichoplusia ni TED virus
+#                'NC_035674.1': [446, 3299],    # Australian Anopheles totivirus
+#                'NC_035132.1': [6568, 7294],   # Culex ohlsrhavirus
+#                'NC_028484.1': [6555, 7282],   # Tongilchon ohlsrhavirus
+#                'NC_040669.1': [6773, 7497],   # Riverside virus 1
+#                'NC_025384.1': [6789, 6267]}   # Culex tritaeniorhynchus rhabdovirus
+#                
+# class Hit:
+#     def __init__(self, pos = [], overlap = False, primary = True, data = None):
+#         self._pos = pos
+#         self._overlap = overlap
+#         self._primary = primary
+#         self._data = data
+#         
+#     def doesOverlap(self):
+#         return self._overlap
+#         
+#     def isPrimary(self):
+#         return self._primary
+#         
+#     def getData(self):
+#         return self._data
+#         
+#     def getPos(self):
+#         return self._pos
+#         
+#     def __len__(self):
+#         return len(self._pos)
+#         
+#     def __getitem__(self, index):
+#         return self._pos[index]
+#         
+#     def __contains__(self, interval):
+#         try:
+#             iterator = iter(interval)
+#         except TypeError:
+#             start = end = interval
+#         else:
+#             start, end = interval
+#             if start > end:
+#                 start, end = end, start
+#                 
+#         for index in range(0, len(self._pos), 2):
+#             if (self._pos[index] <= self._pos[index + 1]) and ((start >= self._pos[index]) and (end <= self._pos[index + 1])):
+#                 return True
+#             elif (self._pos[index] > self._pos[index + 1]) and ((start <= self._pos[index]) and (end >= self._pos[index + 1])):
+#                 return True
+#         return False
+#         
+# #    def __setitem__(self, index, value)
+#         
+# #    def __iadd__(self, other)
+#         
+# class Hits:
+#     def __init__(self):
+#         self._hits = []   # list of hits
+#         
+#     def addHit(self, pos, overlap = False, primary = True, data = None):
+#         self._hits.append(Hit(pos, overlap, primary, data))
+#         
+#     def addHits(self, otherHitsList):
+#         self._hits.extend(otherHitsList)
+#         
+#     def getHits(self):
+#         return self._hits
+#         
+#     def getPrimaryHitsOnly(self):
+#         primaryHits = []
+#         for hit in self._hits:
+#             if hit.isPrimary():
+#                 primaryHits.append(hit)
+#         return primaryHits
+#         
+#     def adjust(self, adjustment):
+#         for index in range(len(self._hits)):
+#             for index2 in range(len(self._hits[index]._pos)):
+#                 self._hits[index]._pos[index2] += adjustment
+#                 
+#     def __contains__(self, interval):
+#         for hit in self._hits:
+#             if interval in hit:
+#                 return True
+#         return False
+#                 
+#     def __len__(self):
+#         return len(self._hits)
+#             
+# #    def __iadd__(self, other)
+#         
+# # class Hits:
+# #     def __init__(self):
+# #         self._hits = []   # list of lists
+# #         self._overlaps = []
+# #         
+# #     def addHit(self, hit, overlap = False):
+# #         self._hits.append(hit)
+# #         self._overlaps.append(overlap)
+# #         
+# #     def getHits(self):
+# #         return self._hits, self._overlaps
+# 
+# def getGenBank(accessionID):
+# 	"""
+# 	Query NCBI to get a gb file.
+# 	"""
+# 	
+# 	Entrez.email = 'havill@denison.edu'
+# 	try:
+# 		handle = Entrez.efetch(db = 'nucleotide', id = accessionID, rettype = 'gb', retmode = 'text')
+# 	except:
+# 		print('Error retrieving GenBank record for ' + accessionID + ': ' + sys.exc_info()[1] + '\nDiagram not created.')
+# 		return False
+# 		
+# 	gbFile = open(GB_DIR + accessionID + '.gb', 'w')
+# 	gbFile.write(handle.read())
+# 	gbFile.close()
+# 	
+# 	return True
+# 
+# def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL5_hits, showPlot, small, omitInReference):    
+# 
+# #    hits = getHits(acc)
+# 
+#     VIRUSES_DIR = RESULTS_DIR + 'viruses/'
+#     if not Path(VIRUSES_DIR).exists():
+#         os.system('mkdir ' + VIRUSES_DIR)
+#     DIAGRAMS_DIR = VIRUSES_DIR + 'diagrams/'
+#     if not Path(DIAGRAMS_DIR).exists():
+#         os.system('mkdir ' + DIAGRAMS_DIR)
+#     FAMILY_DIR = DIAGRAMS_DIR + family
+#     if not Path(FAMILY_DIR).exists():
+#         os.system('mkdir ' + FAMILY_DIR)
+#     
+# #     if not Path(outputDir).exists():
+# #         os.mkdir(outputDir)
+# 
+#     if small:
+#         width = 3
+#         thickness = 1
+#         ref_thickness = 2
+#         fontsize = 1
+#         plot_linewidth = 0.25 # 0.75
+#         draw_line = False
+#         with_ruler = False
+#     #   ax.xaxis.set_tick_params(width=5)
+#     else:
+#         width = 10
+#         thickness = 10
+#         fontsize = 8
+#         ref_thickness = 10
+#         plot_linewidth = 0.75
+#         draw_line = True
+#         with_ruler = True
+# 
+#     
+#     if not Path(GB_DIR + acc + '.gb').exists():
+#         if not getGenBank(acc):
+#             return
+#     virusRecord = MyCustomTranslator().translate_record(GB_DIR + acc + '.gb')  # GraphicRecord
+# #    virusRecord.plots_indexing = 'genbank'  # start at 1
+#     codingStart = 1
+#     codingEnd = virusRecord.sequence_length
+#     for f in virusRecord.features:
+#         f.thickness = ref_thickness
+#         f.linewidth = 0
+#         f.fontdict = {'size': fontsize}
+#         if 'UTR' in f.label:
+#             if '5' in f.label:
+#                 codingStart = f.end + 1
+#             elif '3' in f.label:
+#                 codingEnd = f.start   # starts are actual start - 1 for some reason
+#                 
+#     virusRecord2 = SeqIO.read('/home/havill/data/aegypti/gb/' + acc + '.gb', 'gb')  # SeqRecord
+#     if isFamily:
+#         virusName = 'Family ' + family + ' (' + virusRecord2.id + ': ' + virusRecord2.description[:80]
+#         if len(virusRecord2.description) > 80:
+#             virusName += '...'
+#         virusName += ')'
+#         print('Creating diagram' + 's' * separatePops + ' for family ' + family + ' (using representative ' + virusRecord2.id + ')...')
+#     else:
+#         virusName = virusRecord2.id + ': ' + virusRecord2.description[:80]
+#         if len(virusRecord2.description) > 80:
+#             virusName += '...'
+#         virusName += ' (' + family + ')'
+#         print('Creating diagram' + 's' * separatePops + ' for ' + virusName + '...')
+#                 
+#     features = {}
+#     for specimen in allSpecimens:
+#         features[specimen] = []
+#         if specimen in hits:
+#             g = 1.0
+#             for hit in hits[specimen].getHits():
+#                 if hit.isPrimary():
+#                     transparency = 0.75  # so overlap can be seen
+#                 else:
+#                     transparency = 0.25
+#                 if len(hit) == 2:
+#                     color = (0, 0, 1) + (transparency,) # blue
+#                 else:
+#                     color = (g, 0, 0) + (transparency,) # red
+#                     g = max(g - 0.25, 0)
+# #                 if hit.doesOverlap():
+# #                     lc = (1, 1, 1) + (transparency,)    # white
+# #                 else:
+#                 lc = (0, 0, 0, 0)
+#                 for index in range(0, len(hit), 2):
+#                     start = hit[index]
+#                     end = hit[index + 1]
+#                     features[specimen].append(GraphicFeature(start=start, end=end, strand=1, color=color, label = None, thickness = thickness, linewidth = 0, linecolor = lc))
+#                 if hit.getData() != []:  # add reference overlap regions
+#                     lc = (1, 1, 1) + (transparency,)    # white
+#                     for start, end in hit.getData():
+#                         features[specimen].append(GraphicFeature(start=start, end=end, strand=1, color=color, label = None, thickness = thickness, linewidth = 1, linecolor = lc))
+# 
+#             
+# #     for specimen in hits2:
+# #         g = 1.0
+# #         for hit in hits2[specimen].getHits():
+# #             if len(hit) == 2:
+# #                 color = (0, 0, 1, 0.25)   # translucent blue
+# #             else:
+# #                 color = (g, 0, 0, 0.25)   # translucent red
+# #                 g = g - 0.25
+# #             if hit.doesOverlap():
+# #                 lc = (1, 1, 1, 0.25)      # white
+# #             else:
+# #                 lc = (0, 0, 0, 0)
+# #             for index in range(0, len(hit), 2):
+# #                 start = hit[index]
+# #                 end = hit[index + 1]
+# #                 features[specimen].append(GraphicFeature(start=start, end=end, strand=1, color=color, label = None, thickness = thickness, linewidth = 0, linecolor = lc))
+#         
+#     newFeatures = {}
+#     for specimen in features:
+#         for popName in populations:
+#             for pattern in populations[popName]:
+#                 if pattern in specimen:
+#                     region = popName
+#                     break
+#         p = re.compile(r'[0-9]+')
+#         num = int(p.findall(specimen)[0])
+#         newFeatures[(region, num)] = features[specimen]
+#         
+#     pops = ['all']
+#     if separatePops:
+#         pops.extend(list(populations.keys()))
+#         
+#     for pop in pops:
+#         if pop == 'all':
+#             specimens = list(newFeatures.keys())
+#         else:
+#             specimens = [specimen for specimen in newFeatures if specimen[0] == pop]
+#         specimens.sort()
+#         
+#         height = (6 * thickness / 225) * (len(specimens) + 3)
+#         
+#         numAxes = len(specimens) + 2
+#         if showPlot:
+#             numAxes +=1
+#         if showAaegL5_hits and (acc in AaegL5_hits):
+#             numAxes += 1
+#             
+#         height = (6 * thickness / 225) * numAxes
+#         
+#         fig, ax = pyplot.subplots(numAxes, 1, sharex = False, sharey = False, figsize = (width, height), gridspec_kw = {'height_ratios': [4] + [1] * (numAxes - 1)})
+#         fig.subplots_adjust(top = 0.99, bottom = 0.01, left = 0.18, right = 0.95)
+#         fig.suptitle(virusName, fontsize = fontsize, fontweight = 'bold', y = 0.995)
+#         
+#         virusRecord.box_linewidth = 0
+#         virusRecord.plot(ax = ax[0], figure_width=width, draw_line = draw_line, with_ruler = with_ruler, max_line_length = 30, max_label_length = 30) # prevent multiline labels
+#         x0, y0, w, h = ax[0].get_position().bounds
+#         ax[0].set_position([x0, y0+h*0.2, w, h])
+#         ax[0].tick_params(labelsize = fontsize)
+#         xlims = ax[0].get_xlim()
+#         
+#         AaegL5_features = []
+#         if acc in AaegL5_hits:
+#             for index in range(0, len(AaegL5_hits[acc]), 2):
+#                 start = AaegL5_hits[acc][index]
+#                 end = AaegL5_hits[acc][index + 1]
+#                 AaegL5_features.append(GraphicFeature(start=start, end=end, strand=0, color='lightgray', label = None, thickness = thickness, linewidth = 0))
+#     
+#         x = range(virusRecord.sequence_length)
+#         y = [0] * virusRecord.sequence_length
+#         
+#         for specimen in specimens:
+#             for feature in newFeatures[specimen]:
+#                 start = min(max(feature.start, 1), virusRecord.sequence_length - 1)
+#                 end = min(feature.end, virusRecord.sequence_length - 1)
+#                 for i in range(min(start, end), max(start, end) + 1):
+#                     try:
+#                         y[i-1] += 1
+#                     except IndexError:
+#                         print(i, virusRecord.sequence_length - 1)
+#                         return
+#                     
+#         for feature in AaegL5_features:
+#             start = feature.start
+#             end = feature.end
+#             for i in range(min(start, end), max(start, end) + 1):
+#                 y[i-1] += 1
+#                 
+#         axisIndex = 1
+#         y = [y[i] / len(specimens) for i in range(len(y))]
+#         if showPlot:
+#             ax[1].plot(x, y, color = 'blue', linewidth = plot_linewidth)
+#             ax[1].set_xlim(*xlims)
+#             ax[1].set_ylim(0, 2)
+#             ax[1].axis('off')
+#             ax[1].set_frame_on(False)
+#             axisIndex += 1
+#     
+#         y = [y[i] > 0 for i in range(len(y))]
+#         ax[axisIndex].bar(x, y, color = 'blue')
+#         ax[axisIndex].set_xlim(*xlims)
+#         ax[axisIndex].set_ylim(0, 2)
+#         ax[axisIndex].axis('off')
+#         ax[axisIndex].set_frame_on(False)
+#         coverage = (sum(y[codingStart-1:codingEnd]) / (codingEnd - codingStart + 1)) * 100
+#         ax[axisIndex].text(virusRecord.sequence_length, -0.1, '{0:4.1f}%'.format(coverage) + ' ', horizontalalignment = 'left', fontdict = {'size': fontsize})
+#     
+#         axisIndex += 1
+#         if showAaegL5_hits and (acc in AaegL5_hits):
+#             record = GraphicRecord(features = AaegL5_features, sequence_length = virusRecord.sequence_length, feature_level_height = 0)
+#             record.plot(ax = ax[axisIndex], figure_width=width, with_ruler = False, draw_line = draw_line)
+#             
+#             start, end = record.span
+#             plot_start, plot_end = start - 0.8, end - 0.2
+#             ax[axisIndex].plot([plot_start, plot_end], [0, 0], linewidth = 0.25, zorder=-1000, c="k")
+#             
+#             ax[axisIndex].text(0, -0.1, 'AaegL5 ', horizontalalignment = 'right', fontdict = {'size': fontsize})
+#             axisIndex += 1
+#        
+#         for specimen in specimens:
+#             specimenName = specimen[0] + ' ' + str(specimen[1])
+# #            print(specimenName)
+#             record = GraphicRecord(features = newFeatures[specimen], sequence_length = virusRecord.sequence_length, feature_level_height = 0)
+#             record.plot(ax = ax[axisIndex], figure_width=width, with_ruler = False, draw_line = draw_line)
+#             
+#             start, end = record.span
+#             plot_start, plot_end = start - 0.8, end - 0.2
+#             ax[axisIndex].plot([plot_start, plot_end], [0, 0], linewidth = 0.25, zorder=-1000, c="k")
+#             
+#             ax[axisIndex].text(0, -0.1, specimenName + ' ', horizontalalignment = 'right', fontdict = {'size': fontsize})
+#             
+#             for p in ax[axisIndex].patches:
+#                 if p.get_edgecolor()[:3] == (1, 1, 1):  # white
+#                     p.set_hatch('////')
+#                     
+#             
+#             axisIndex += 1
+#         if isFamily:
+#             figName = family + '_' + pop + '.pdf'
+#         else:
+#             figName = acc + '_' + pop + '.pdf'
+#         fig.savefig(Path(FAMILY_DIR) / figName)
+#         pyplot.close(fig)
+
+# def getHits_old(acc):
+#     """Return all hits for given accession number as a dictionary
+#        with key = specimen and value = [start, end, start, end, ...]"""
+#        
+#     resultsFile = open(RESULTS_DIR + 'results_all.tsv', 'r')
+#     header1 = resultsFile.readline()
+#     header2 = resultsFile.readline()
+#     accs = header1.split('\t')
+#     index = accs.index(acc)
+#     p = re.compile(r'[0-9]+-[0-9]+')
+#     allHits = {}
+#     for line in resultsFile:
+#         cols = line.rstrip().split('\t')
+#         specimen = cols[0]
+#         hits = cols[index]
+#         hits = p.findall(hits)
+#         allHits[specimen] = []
+#         for h in hits:
+#             pos = h.split('-')
+#             start = int(pos[0])
+#             end = int(pos[1])
+#             allHits[specimen].append([start, end])
+#     resultsFile.close()
+#     
+#     return allHits
+    
+# def getHits(acc):
+#     dir = Path(RESULTS_DIR + 'specimens/')
+#     subdirs = [d for d in dir.iterdir()]
+#     files = [d / ('xml/' + d.name + '_all_hits_features.xml') for d in subdirs ]
+#     files.sort()
+# 
+#     hits = {}
+#     hits2 = {}
+#     for file in files:
+#         specimen = file.name.rstrip('_all_hits_features.xml')
+#         print(specimen)
+#         hits[specimen] = Hits()
+#         hits2[specimen] = Hits()
+#         tree = ET.parse(str(file))
+#         root = tree.getroot()
+#         for contig in root:
+#             v = contig.find('virushit')  # first virus hit
+#             seqid = v.attrib['seqid']
+#             if '|' in seqid:
+#                 seqid = seqid.split('|')[1]
+#             if seqid == acc:
+#                 virushits = contig.findall('virushit')
+#                 hit = []
+#                 for virushit in virushits:
+#                     start = int(virushit.find('sstart').text)
+#                     end = int(virushit.find('send').text)
+#                     hit.extend([start, end])
+#                 overlap = len(contig.findall('vectorhitoverlap')) > 0
+#                 if (contig.attrib['besthit'] == 'True') and (len(virushits) < 5):
+#                     hits[specimen].addHit(hit, overlap)
+#                 else:
+#                     hits2[specimen].addHit(hit, overlap)
+#                     print('*', end='')
+#                 print(hit)
+#     return hits, hits2
+
+# def getHits(acc):
+#     dir = Path(RESULTS_DIR + 'specimens/')
+#     subdirs = [d for d in dir.iterdir()]
+#     files = [d / ('xml/' + d.name + '_all_hits_features.xml') for d in subdirs ]
+#     files.sort()
+# 
+#     hits = {}
+#     for file in files:
+#         specimen = file.name.rstrip('_all_hits_features.xml')
+#         print(specimen)
+#         hits[specimen] = Hits()
+#         tree = ET.parse(str(file))
+#         root = tree.getroot()
+#         for contig in root:
+#             v = contig.find('virushit')  # first virus hit
+#             seqid = v.attrib['seqid']
+#             if '|' in seqid:
+#                 seqid = seqid.split('|')[1]
+#             if seqid == acc:
+#                 virushits = contig.findall('virushit')
+#                 hit = []
+#                 for virushit in virushits:
+#                     start = int(virushit.find('sstart').text)
+#                     end = int(virushit.find('send').text)
+#                     hit.extend([start, end])
+#                 overlap = len(contig.findall('vectorhitoverlap')) > 0
+#                 if (contig.attrib['besthit'] == 'True'): # and (len(virushits) < 5):
+#                     hits[specimen].addHit(hit, overlap, True)
+#                 else:
+#                     hits[specimen].addHit(hit, overlap, False)
+#                     print('*', end='')
+#                 print(hit)
+#     return hits
+
+# def getHits(omitInReference = True):
+#     dir = Path(RESULTS_DIR + 'specimens/')
+#     subdirs = [d for d in dir.iterdir()]
+#     files = [d / ('xml/' + d.name + '_all_hits_features.xml') for d in subdirs ]
+#     files.sort()
+# 
+#     allVirusHits = {}
+#     allSpecimens = []
+#     for file in files:
+#         specimen = file.name.rstrip('_all_hits_features.xml')
+#         print(specimen)
+#         allSpecimens.append(specimen)
+#         tree = ET.parse(str(file))
+#         root = tree.getroot()
+#         for contig in root:
+#             if 'inreference' in contig.attrib:
+#                 overlap = contig.attrib['inreference'] == 'True'
+#             else:
+#                 overlap = False
+#             if 'referenceoverlaps' in contig.attrib:
+#                 referenceOverlaps = eval(contig.attrib['referenceoverlaps'])
+#             else:
+#                 referenceOverlaps = []
+#             if omitInReference and overlap:
+#                 continue
+#             virushits = contig.findall('virushit')
+#             v = virushits[0]  # first virus hit
+#             seqid = v.attrib['seqid']
+#             if '|' in seqid:
+#                 seqid = seqid.split('|')[1]
+#             if seqid not in allVirusHits:
+#                 allVirusHits[seqid] = {}
+#             if specimen not in allVirusHits[seqid]:
+#                 allVirusHits[seqid][specimen] = Hits()
+# 
+#             hit = []
+#             for virushit in virushits:
+#                 start = int(virushit.find('sstart').text)
+#                 end = int(virushit.find('send').text)
+#                 hit.extend([start, end])
+#             primary = contig.attrib['besthit'] == 'True'  # and (len(virushits) < 5):
+#             allVirusHits[seqid][specimen].addHit(hit, overlap, primary, referenceOverlaps)
+# #             if not primary:
+# #                 print('*', end='')
+# #             print(seqid, hit)
+#     return allVirusHits, allSpecimens
 
 # def drawFamily(family, repACC, separatePops = False):
 #     allVirusHits, allSpecimens = getHits()
@@ -1211,80 +1218,80 @@ def getVirusSequences2(virusACC, vStart, vEnd, flankLength, outFileName, sort = 
 #                 
 #     drawVirus(repACC, family, famHits, allSpecimens, separatePops, True)
 
-def drawFamily(families, famACCs, separatePops, showAaegL5_hits, showPlot, small, omitInReference):
-#     if isinstance(families, str):
-#         if not isinstance(repACCs, str):
-#             print('The family and repACC must both be strings.')
-#             return
-#         families = [families]
-#         repACCs = [repACCs]
-#     else:
-#         if famACCs is not None:
-#             print('family and famACCs cannot both be lists.')
-#             return
-#         if not isinstance(repACCs, list):
-#             print('The family and repACC must both be iterable.')
-#             return
-
-    allVirusHits, allSpecimens = getHits(omitInReference)
-        
-    if famACCs is None:
-        fams = readFamFile()
-    
-    for family, repACC in families:
-        if famACCs is None:  # if False, must be only one family in families
-            famACCs = []
-            for acc in allVirusHits:
-                if acc not in fams:
-                    fam = getFamily(acc)
-                    fams[acc] = fam
-                    addFamily(acc, fam)
-                if fams[acc] == family:
-                    famACCs.append(acc)
-        
-        startPositions = {}
-        for acc in famACCs:
-            if not Path(GB_DIR + acc + '.gb').exists():
-                if not getGenBank(acc):
-                    continue
-            virusRecord = SeqIO.read('/home/havill/data/aegypti/gb/' + acc + '.gb', 'gb')  # SeqRecord
-            minCDSPos = math.inf
-            for feature in virusRecord.features:
-                if feature.type == 'CDS':
-                    minCDSPos = min(minCDSPos, feature.location.start)
-            startPositions[acc] = minCDSPos
-    
-        famHits = {}
-        for acc in famACCs:
-            for specimen in allVirusHits[acc]:
-                if specimen not in famHits:
-                    famHits[specimen] = Hits()
-                allVirusHits[acc][specimen].adjust(startPositions[repACC] - startPositions[acc])
-                famHits[specimen].addHits(allVirusHits[acc][specimen].getPrimaryHitsOnly())  # only primary hits so one hit per contig
-                
-        drawVirus(repACC, family, famHits, allSpecimens, separatePops, True, showAaegL5_hits, showPlot, small, omitInReference)
-        famACCs = None
-    
-def drawAll(separatePops, omitInReference):
-    allVirusHits, allSpecimens = getHits(omitInReference)
-    
-    fams = readFamFile()
-
-    for acc in allVirusHits:
-        doVirus = False  # only draw virus if it has at least one primary hit
-        for specimen in allVirusHits[acc]:
-            for hit in allVirusHits[acc][specimen].getHits():
-                if hit.isPrimary():
-                    doVirus = True
-                    break
-            if doVirus:
-                break
-        if doVirus:
-            if acc not in fams:
-                fam = getFamily(acc)
-                fams[acc] = fam
-                addFamily(acc, fam)
-            drawVirus(acc, fams[acc], allVirusHits[acc], allSpecimens, separatePops, False, True, True, False, omitInReference)
+# def drawFamily(families, famACCs, separatePops, showAaegL5_hits, showPlot, small, omitInReference):
+# #     if isinstance(families, str):
+# #         if not isinstance(repACCs, str):
+# #             print('The family and repACC must both be strings.')
+# #             return
+# #         families = [families]
+# #         repACCs = [repACCs]
+# #     else:
+# #         if famACCs is not None:
+# #             print('family and famACCs cannot both be lists.')
+# #             return
+# #         if not isinstance(repACCs, list):
+# #             print('The family and repACC must both be iterable.')
+# #             return
+# 
+#     allVirusHits, allSpecimens = getHits(omitInReference)
+#         
+#     if famACCs is None:
+#         fams = readFamFile()
+#     
+#     for family, repACC in families:
+#         if famACCs is None:  # if False, must be only one family in families
+#             famACCs = []
+#             for acc in allVirusHits:
+#                 if acc not in fams:
+#                     fam = getFamily(acc)
+#                     fams[acc] = fam
+#                     addFamily(acc, fam)
+#                 if fams[acc] == family:
+#                     famACCs.append(acc)
+#         
+#         startPositions = {}
+#         for acc in famACCs:
+#             if not Path(GB_DIR + acc + '.gb').exists():
+#                 if not getGenBank(acc):
+#                     continue
+#             virusRecord = SeqIO.read('/home/havill/data/aegypti/gb/' + acc + '.gb', 'gb')  # SeqRecord
+#             minCDSPos = math.inf
+#             for feature in virusRecord.features:
+#                 if feature.type == 'CDS':
+#                     minCDSPos = min(minCDSPos, feature.location.start)
+#             startPositions[acc] = minCDSPos
+#     
+#         famHits = {}
+#         for acc in famACCs:
+#             for specimen in allVirusHits[acc]:
+#                 if specimen not in famHits:
+#                     famHits[specimen] = Hits()
+#                 allVirusHits[acc][specimen].adjust(startPositions[repACC] - startPositions[acc])
+#                 famHits[specimen].addHits(allVirusHits[acc][specimen].getPrimaryHitsOnly())  # only primary hits so one hit per contig
+#                 
+#         drawVirus(repACC, family, famHits, allSpecimens, separatePops, True, showAaegL5_hits, showPlot, small, omitInReference)
+#         famACCs = None
+#     
+# def drawAll(separatePops, omitInReference):
+#     allVirusHits, allSpecimens = getHits(omitInReference)
+#     
+#     fams = readFamFile()
+# 
+#     for acc in allVirusHits:
+#         doVirus = False  # only draw virus if it has at least one primary hit
+#         for specimen in allVirusHits[acc]:
+#             for hit in allVirusHits[acc][specimen].getHits():
+#                 if hit.isPrimary():
+#                     doVirus = True
+#                     break
+#             if doVirus:
+#                 break
+#         if doVirus:
+#             if acc not in fams:
+#                 fam = getFamily(acc)
+#                 fams[acc] = fam
+#                 addFamily(acc, fam)
+#             drawVirus(acc, fams[acc], allVirusHits[acc], allSpecimens, separatePops, False, True, True, False, omitInReference)
 
 # def main():
 # #     viruses = ['NC_001564.2',   # cfav
@@ -1356,16 +1363,16 @@ def drawAll(separatePops, omitInReference):
 #                 addFamily(acc, fam)
 #             drawVirus(acc, fams[acc], allVirusHits[acc], allSpecimens, True)
 
-if __name__ == '__main__':
+#if __name__ == '__main__':
 #    drawFamily(family, repACC, famACCs, separatePops, showAaegL5_hits, showPlot, small, omitInReference)
 #    drawFamily('Flaviviridae', 'NC_001564.2', None, False, False, True, False, False)
 #    drawFamily('Xinmoviridae', 'MH037149.1', None, False, False, True, False, False)
 #    drawFamily('Rhabdoviridae', 'NC_035132.1', None, False, False, True, False, False)
 #    drawFamily('Rhabdoviridae', 'NC_035132.1', ['NC_035132.1', 'KY768856.1', 'MH188003.1', 'MF176358.1', 'NC_028484.1'], False)
 #    drawFamily('Orthomyxoviridae', 'MF176251.1', None, False, False, True, False, False)
-    drawFamily('Phenuiviridae', 'NC_038263.1', None, False, False, True, False, False)
+#    drawFamily('Phenuiviridae', 'NC_038263.1', None, False, False, True, False, False)
 #    drawFamily('Totiviridae', 'NC_035674.1', None, False, False, True, False, False)
     
 #    drawFamily(['Flaviviridae', 'Orthomyxoviridae', 'Phenuiviridae', 'Rhabdoviridae', 'Totiviridae', 'Xinmoviridae'], ['NC_001564.2', 'MF176251.1', 'NC_038263.1', 'NC_035132.1', 'NC_035674.1', 'MH037149.1'], None, False, False, True, False, False)
-    drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)
+#    drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)
 #    drawAll(False, False)
