@@ -1,4 +1,9 @@
-from Bio import SeqIO, Entrez
+import matplotlib
+matplotlib.use('agg')
+from matplotlib.backends.backend_pdf import PdfPages
+import matplotlib.pyplot as pyplot
+from Bio import SeqIO, Entrez, AlignIO
+from Bio.Align import MultipleSeqAlignment
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 from dna_features_viewer import GraphicFeature, GraphicRecord, BiopythonTranslator
 from intervaltree import Interval, IntervalTree
@@ -7,8 +12,6 @@ from multiprocessing import Process
 from pathlib import Path
 import copy
 import math
-import matplotlib
-import matplotlib.pyplot as pyplot
 import numpy as np
 import os
 import pickle
@@ -19,93 +22,10 @@ import time
 import urllib.request as web
 
 from hits import Hit, Hits
-
-SPADES_EXEC = '/home/havill/bin/SPAdes-3.14.1-Linux/bin/spades.py'
-ROOT_DIR = '/home/havill/data/aegypti/analyzed/'
-RESULTS_DIR = '/home/havill/data2/results4/'
-GB_DIR = '/home/havill/data/aegypti/gb/'
-FAMILY_CSV = '/home/havill/data2/results/families.csv'
-LOGFILE_NAME = 'log.log'
-LOGFILE_PATH = Path(RESULTS_DIR) / LOGFILE_NAME
-MIN_PIDENT = 80
-EVALUE_V = 1e-10
-EVALUE_A = 1e-10
-ALLOWED_OVERLAP = 20  # bp aedes hits may overlap ends of virus hits or each other
-OVERLAP_FRACTION = 0.9  # if this fraction of a hit overlaps with an Aedes hit, it is considered to be present in the reference genome
-MAX_FLANK_DISTANCE = 10000
-COMPLEXITY_K = 3
-COMPLEXITY_CUTOFF = 0.75
-#MAX_FLANKING_HITS = 10
-FLANK_DRAW_LIMIT = 5
+from kmeans import findClusters
+from util import *
 
 iTrees = None
-
-def cleanACC(acc):
-    acc = acc.rstrip().rstrip('|')  # remove trailing whitespace then '|'
-    if '|' in acc:
-        acc = acc.split('|')[1]     # remove leading text plus '|'
-    return acc.strip()              # remove any remaining whitespace, just in case
-
-def complexity(dna, W = 0):
-    """https://doi.org/10.1016/S0097-8485(99)00007-8"""
-    
-    dna = dna.upper()
-    dna = dna.replace('-', '')
-    
-    if W == 0:
-        W = int(math.log(len(dna), 4)) + 2
-    
-    C = 1
-    for k in range(1, W + 1):
-        kmers = set()
-        for i in range(0, len(dna) - k + 1):
-            kmers.add(dna[i:i+k])
-        C *= (len(kmers) / (4 ** k))
-    return C
-    
-def getFamily(accessionID):
-    """
-    Query NCBI to get family of virus corresponding to an accession number.
-    """
-    
-    Entrez.email = 'havill@denison.edu'
-    try:
-        handle = Entrez.efetch(db = 'nucleotide', id = accessionID, rettype = 'native', retmode = 'xml')
-        result = handle.read()
-    except:
-        writelog('Exception:', sys.exc_info()[1])
-        return ''
-        
-    root = ET.fromstring(result)
-    lineage = root.find('.//OrgName_lineage')
-
-    if lineage is not None:
-        lineageParts = lineage.text.split('; ')
-        if len(lineageParts) <= 6:    # 1-6
-            return lineageParts[-1]
-        elif len(lineageParts) <= 8:  # 7-8
-            return lineageParts[6]
-        else:
-            return lineageParts[7]    # 9-
-    else:
-        return ''
-    
-def readFamFile():
-    try:
-        famFile = open(FAMILY_CSV, 'r')
-    except FileNotFoundError:
-        return {}
-    fams = {}
-    for line in famFile:
-        cols = line.rstrip().split(',')
-        fams[cols[0]] = cols[1]
-    famFile.close()
-    return fams
-    
-def addFamily(acc, name):
-    famFile = open(FAMILY_CSV, 'a')
-    famFile.write(acc + ',' + name + '\n')
-    famFile.close()
 
 ###############################################################################
 
@@ -126,7 +46,7 @@ def getUnmappedReads(filenameBAM):
         index = filenameBAM.index('.bam')
     newFilenameBAM = filenameBAM[:index] + '_unmapped_with_mates.bam'  # absolute path
 
-    writelog('   Getting unmapped reads...', True)
+    writelog('Getting unmapped reads...', True)
 
     if not Path(newFilenameBAM).exists():
         bamfile = pysam.AlignmentFile(filenameBAM, 'rb', threads = 8)
@@ -151,7 +71,7 @@ def getUnmappedReads(filenameBAM):
 
     # Convert unmapped reads to FASTA.
 
-    writelog('   Writing unmapped reads to a FASTA file...', True)
+    writelog('Writing unmapped reads to a FASTA file...', True)
     newFilenameFASTA = newFilenameBAM[:-4] + '.fasta'  # absolute path
     if not Path(newFilenameFASTA).exists():
         os.system('samtools fasta ' + newFilenameBAM + ' > ' + newFilenameFASTA)
@@ -180,7 +100,7 @@ def writeReadsFASTQ(viralFilenameBAM, virusName):
         os.system('mkdir ' + str(spadesPath))
         
     if (spadesPath / 'viral1.fastq').exists():
-        writelog('   Skipping ... fastq files exist.', True)
+        writelog('   Skipping - FASTQ files exist.', True)
         return
     
     os.system('samtools fastq -1 ' + str(spadesPath / 'viral1.fastq') + ' -2 ' + str(spadesPath / 'viral2.fastq') + ' -s ' + str(spadesPath / 'viral_single.fastq') + ' ' + viralFilenameBAM)
@@ -201,7 +121,7 @@ def assembleReads(dirName, virusName):
     
     spadesPath = Path(dirName) / ('spades_' + virusName)
     if (spadesPath / 'scaffolds.fasta').exists():
-        writelog('   Skipping ... scaffolds.fasta exists.', True)
+        writelog('   Skipping - scaffolds.fasta exists.', True)
         return True
         
     viral1Name = str(spadesPath / 'viral1.fastq')
@@ -218,27 +138,26 @@ def assembleReads(dirName, virusName):
     
 ###############################################################################
     
-def blastScaffolds(dirName, virusName, virusDB, evalueV, force = False):
+def blastScaffolds(dirName, virusName, virusDB, force = False):
     """BLAST scaffolds against viral and aegypti genomes and combine to identify putative viral insertions."""
     
     spadesPath = Path(dirName) / ('spades_' + virusName)
     scaffoldsName = str(spadesPath / 'scaffolds.fasta')
     outVirusCSV = spadesPath / ('blast_scaffolds_' + virusName + '.csv')
-#    outAACSV = str(spadesPath / 'blast_scaffolds_aa.csv')
     
     writelog('BLASTing scaffolds against viral database...', True)
     
     if not force and outVirusCSV.exists():
         writelog('   Skipping - ' + str(outVirusCSV) + ' exists.', True)
     else:
-        os.system('blastn -query ' + scaffoldsName + ' -db ' + virusDB + ' -num_threads 16 -task blastn -evalue ' + str(evalueV) +
+        os.system('blastn -query ' + scaffoldsName + ' -db ' + virusDB + ' -num_threads 16 -task blastn -evalue ' + str(EVALUE_V) +
                   ' -max_target_seqs 5000' +
                   ' -outfmt "10 qseqid qstart qend qseq sstart send sseq evalue bitscore sseqid stitle pident"' + 
                   ' -out ' + str(outVirusCSV))
 
 ###############################################################################
-
-def readCSV(csvFilename, minLength):
+                  
+def readCSV(csvFilename):
     """Read a BLAST CSV file and return a dictionary of hits.
      
        Parameter:
@@ -257,43 +176,23 @@ def readCSV(csvFilename, minLength):
     for line in csv:
         line = line.rstrip()
         row = line.split(',')
-        contig = row[0]            # qseqid = contig name
-#         qstart = row[1]          # start pos in contig
-#         qend = row[2]            # end pos in contig
-#         qseq = row[3]            # aligned sequence in contig
-#        length = len(row[3])       # length of hit in contig
-        sstart = int(row[4])             # start pos in viral genome
-        send = int(row[5])               # end pos in viral genome
-        length = abs(send - sstart) + 1  # length of viral hit
-#         sseq = row[6]            # aligned sequence in viral genome
-#         evalue = float(row[7])   # e-value of alignment
-#         bitscore = float(row[8]) # bit score of alignment
-        sseqid = row[9]          # viral genome accession number
-        stitle = row[10]         # viral genome title
-#         pident = row[11]         # % identity of alignment
+        contig = row[0]                   # qseqid = contig name
+        sstart = int(row[4])              # start pos in viral genome
+        send = int(row[5])                # end pos in viral genome
+        length = abs(send - sstart) + 1   # length of viral hit
+        sseqid = row[9]                   # viral genome accession number
+        stitle = row[10].strip('|')       # viral genome title
 
-#         if length >= minLength:
-#             if contig in hits:
-#                 if stitle not in accsUsed[contig]:
-#                     accsUsed[contig][stitle] = sseqid
-#                     hits[contig].append(tuple(row[1:]))
-#                 elif accsUsed[contig][stitle] == sseqid:
-#                     hits[contig].append(tuple(row[1:]))
-#                 # else skip this line
-#             else:
-#                 hits[contig] = [tuple(row[1:])]
-#                 accsUsed[contig] = {stitle: sseqid}
-
-        if length >= minLength:
-            if contig in hits:
-                if stitle not in accsFound[contig]:
-                    accsFound[contig][stitle] = [(sseqid, length)]
-                else: 
-                    accsFound[contig][stitle].append((sseqid, length))
-                hits[contig].append(tuple(row[1:]))
-            else:
-                hits[contig] = [tuple(row[1:])]
-                accsFound[contig] = {stitle: [(sseqid, length)]}
+        if contig in hits:
+            if stitle not in accsFound[contig]:
+                accsFound[contig][stitle] = [(sseqid, length)]
+            else: 
+                accsFound[contig][stitle].append((sseqid, length))
+            hits[contig].append(tuple(row[1:10] + [row[10].strip('|')] + row[11:]))
+        else:
+            hits[contig] = [tuple(row[1:10] + [row[10].strip('|')] + row[11:])]
+            accsFound[contig] = {}
+            accsFound[contig][stitle] = [(sseqid, length)]
     csv.close()
     
     accsToUse = {}
@@ -303,20 +202,26 @@ def readCSV(csvFilename, minLength):
             refAccs = []
             maxLength = 0
             maxLengthAccs = []
+            prefACCFound = False
             for acc, length in accsFound[contig][stitle]:
-                if acc[:3] == 'ref':
+                if (stitle in PREFERRED_ACCS) and (acc in PREFERRED_ACCS[stitle]):
+                    prefACCFound = True
+                    break
+                elif acc[:3] == 'ref':
                     refAccs.append(acc)
                 elif length > maxLength:
                     maxLength = length
                     maxLengthAccs = [acc]
                 elif length == maxLength:
                     maxLengthAccs.append(acc)
-            if refAccs != []:
+            if prefACCFound:
+                accsToUse[contig][stitle] = PREFERRED_ACCS[stitle]
+            elif refAccs != []:
                 accsToUse[contig][stitle] = refAccs
             else:
                 maxLengthAccs.sort()
                 accsToUse[contig][stitle] = [maxLengthAccs[0]]  # use acc with longest hit; if tie use first alphabetically for consistency
-                
+        
     filteredHits = {}
     for contig in hits:
         filteredHits[contig] = []
@@ -330,7 +235,7 @@ def readCSV(csvFilename, minLength):
 
     return filteredHits
     
-def readCSVAA(csvFilename, minLength):
+def readCSVAA(csvFilename):
     """Read a BLAST CSV file and return a dictionary of hits.
      
        Parameter:
@@ -352,26 +257,16 @@ def readCSVAA(csvFilename, minLength):
         line = line.rstrip()
         row = line.split(',')
         contig = row[0]            # qseqid = contig name
-#         qstart = row[1]          # start pos in contig
-#         qend = row[2]            # end pos in contig
-#         qseq = row[3]            # aligned sequence in contig
         length = len(row[3])       # length of hit in contig
-#         sseqid = row[4]          # viral genome accession number
-#         sstart = row[5]          # start pos in viral genome
-#         send = row[6]            # end pos in viral genome
-#         sseq = row[7]            # aligned sequence in viral genome
-#         evalue = float(row[8])   # e-value of alignment
-#         bitscore = float(row[9]) # bit score of alignment
 
-        if length >= minLength:
-            if contig in hits:
-                hits[contig].append(tuple(row[1:]))
-            else:
-                hits[contig] = [tuple(row[1:])]
+        if contig in hits:
+            hits[contig].append(tuple(row[1:]))
+        else:
+            hits[contig] = [tuple(row[1:])]
 
     return hits
 
-def getHits(dirName, virusName, minLength, evalueA): #, maxFlankingHits):
+def getHits(dirName, virusName): #, maxFlankingHits):
     """Combine viral and vector BLAST results to find putative insertions.
     
        Parameters:
@@ -389,7 +284,7 @@ def getHits(dirName, virusName, minLength, evalueA): #, maxFlankingHits):
     xmlFilename = str(spadesPath / (Path(dirName).name + '_' + virusName + '_hits.xml'))
     scaffoldsFilename = str(spadesPath / 'scaffolds.fasta')
 
-    virusHits = readCSV(csvVirusFilename, 0)
+    virusHits = readCSV(csvVirusFilename)
     if virusHits is None:
         return None
         
@@ -431,7 +326,6 @@ def getHits(dirName, virusName, minLength, evalueA): #, maxFlankingHits):
         sseqid = virusHit[SEQID]          # virus accession number
         hitLength = abs(int(virusHit[QEND]) - int(virusHit[QSTART])) + 1
         hitSeq = virusHit[QSEQ]
-#        hitLength = len(virusHit[QSEQ])   # length of hit in contig
         pident = float(virusHit[PIDENT])  # max pident among all hits for current virus
         maxHitLength = hitLength
         maxHitLengthIndex = 0
@@ -444,10 +338,9 @@ def getHits(dirName, virusName, minLength, evalueA): #, maxFlankingHits):
             if (nextSeqID == sseqid): # and (nextLeft <= right + 1):
                 hitLength += (abs(int(virusHit[QEND]) - int(virusHit[QSTART])) + 1)
                 hitSeq += virusHit[QSEQ]
-#                hitLength += len(virusHit[2])
                 pident = max(pident, float(virusHit[PIDENT]))
-            else:  # finish this combined hit and start a new one
-                if hitLength >= minLength:
+            else:    # finish this combined hit and start a new one
+                if hitLength >= MIN_VIRUS_HIT_LENGTH:
                     hitComplexity = complexity(hitSeq, COMPLEXITY_K)  # COMPLEXITY TEST
                     if hitComplexity < COMPLEXITY_CUTOFF:
                         writelog(contig + ': discarded hit "' + virusHit[STITLE].lstrip('|') + '" with complexity ' + str(hitComplexity) + ' < ' + str(COMPLEXITY_CUTOFF))
@@ -460,7 +353,7 @@ def getHits(dirName, virusName, minLength, evalueA): #, maxFlankingHits):
                             maxPIdent = pident
                             maxPIdentIndex = leftIndex
                 else:
-                    writelog(contig + ': discarded hit "' + virusHit[STITLE].lstrip('|') + '" with length ' + str(hitLength) + ' < ' + str(minLength))
+                    writelog(contig + ': discarded hit "' + virusHit[STITLE].lstrip('|') + '" with length ' + str(hitLength) + ' < ' + str(MIN_VIRUS_HIT_LENGTH))
 
                 # start new combined hit
                 leftIndex = index
@@ -472,7 +365,7 @@ def getHits(dirName, virusName, minLength, evalueA): #, maxFlankingHits):
             sseqid = nextSeqID
             
         # finish last combined hit
-        if hitLength >= minLength:
+        if hitLength >= MIN_VIRUS_HIT_LENGTH:
             hitComplexity = complexity(hitSeq, COMPLEXITY_K)  # COMPLEXITY TEST
             if hitComplexity < COMPLEXITY_CUTOFF:
                 writelog(contig + ': discarded hit "' + virusHit[STITLE].lstrip('|') + '" with complexity ' + str(hitComplexity) + ' < ' + str(COMPLEXITY_CUTOFF))
@@ -485,7 +378,7 @@ def getHits(dirName, virusName, minLength, evalueA): #, maxFlankingHits):
                     maxPIdent = pident
                     maxPIdentIndex = leftIndex
         else:
-            writelog(contig + ': discarded hit "' + virusHit[STITLE].lstrip('|') + '" with length ' + str(hitLength) + ' < ' + str(minLength))
+            writelog(contig + ': discarded hit "' + virusHit[STITLE].lstrip('|') + '" with length ' + str(hitLength) + ' < ' + str(MIN_VIRUS_HIT_LENGTH))
 
         maxLenPIdent[contig] = (maxHitLength, maxHitLengthIndex, maxPIdent, maxPIdentIndex)
         
@@ -503,11 +396,11 @@ def getHits(dirName, virusName, minLength, evalueA): #, maxFlankingHits):
         # search for aedes hits
         SeqIO.write(scaffoldRecords[contig], str(spadesPath / 'contig_temp.fasta'), 'fasta')
         os.system('blastn -query ' + str(spadesPath / 'contig_temp.fasta') 
-                                   + ' -db aegyptidb -num_threads 8 -evalue ' + str(evalueA)
+                                   + ' -db aegyptidb -num_threads 8 -evalue ' + str(EVALUE_A)
                                    + ' -max_target_seqs 500'
                                    + ' -outfmt "10 qseqid qstart qend qseq sseqid sstart send sseq evalue bitscore"'
                                    + ' -out ' + str(spadesPath / 'blast_contig_temp.csv'))
-        aedesHits = readCSVAA(str(spadesPath / 'blast_contig_temp.csv'), 0)
+        aedesHits = readCSVAA(str(spadesPath / 'blast_contig_temp.csv'))
 
 #         if contig in aedesHits:
 #             writelog('  ' + str(len(aedesHits[contig])) + ' aa hits')
@@ -583,11 +476,25 @@ def getHits(dirName, virusName, minLength, evalueA): #, maxFlankingHits):
             overlap = []
             virusIntervalsNotInRef = copy.deepcopy(virusIntervals)
             doesOverlap = False
-            if contig in aedesHits:
+            if contig in aedesHits:  # if there were aedes hits
+                p = re.compile(r'.*length_(\d+)_.*')
+                m = p.match(contig)
+                contigLength = int(m.group(1))
                 for index in range(len(aedesHits[contig])):
                     aedesHit = aedesHits[contig][index]
+                    aedes_qseq = aedesHit[A_QSEQ]
                     aedes_qstart = int(aedesHit[A_QSTART])
                     aedes_qend = int(aedesHit[A_QEND])
+#                    if (virus_qstart - aedes_qend > MIN_FLANKING_QSTART) and (aedes_qstart - virus_qend > MIN_FLANKING_QSTART) and (len(aedes_qseq) < MIN_FLANKING_HIT_LENGTH):
+#                    if (aedes_qstart > MIN_FLANKING_QSTART) and (aedes_qend < contigLength - MIN_FLANKING_QSTART) and (len(aedes_qseq) < MIN_FLANKING_HIT_LENGTH):
+                    if ((virus_qstart - aedes_qend > MIN_FLANKING_DISTANCE) or (aedes_qstart - virus_qend > MIN_FLANKING_DISTANCE)) and (len(aedes_qseq) < MIN_FLANKING_HIT_LENGTH):
+                        writelog(contig + ': discarded distant Aedes hit with length ' + str(len(aedes_qseq)) + ' < ' + str(MIN_FLANKING_HIT_LENGTH))
+                        continue
+                    hitComplexity = complexity(aedes_qseq, COMPLEXITY_K)  # COMPLEXITY TEST
+                    if hitComplexity < COMPLEXITY_CUTOFF:
+                        writelog(contig + ': discarded Aedes hit with complexity ' + str(hitComplexity) + ' < ' + str(COMPLEXITY_CUTOFF))
+                        continue
+    
                     virusIntervalsNotInRef.chop(aedes_qstart, aedes_qend)  # detect overlap with virus hit
 #                    writelog('chopped', aedes_qstart, aedes_qend)
 #                     aedes_chr = aedesHit[A_SEQID]
@@ -646,39 +553,17 @@ def getHits(dirName, virusName, minLength, evalueA): #, maxFlankingHits):
 #             writelog(virusIntervalsInRef2)
 
             contigTree.attrib['referenceoverlaps'] = str([iv.data for iv in virusIntervalsInRef2])
-            
-            matchingFlanks = ET.SubElement(contigTree, 'flanks')
-            # find pairs of before/after aedes hits that are on the same strand and within 10Kbp of each other
-            for b in before:
-                beforeHit = aedesHits[contig][b]
-                for a in after:
-                    afterHit = aedesHits[contig][a]
-                    if beforeHit[A_SEQID] == afterHit[A_SEQID]:  # same chr
-                        if ((int(beforeHit[A_SSTART]) < int(beforeHit[A_SEND]) < int(afterHit[A_SSTART]) + ALLOWED_OVERLAP < int(afterHit[A_SEND]) + ALLOWED_OVERLAP) or 
-                            (int(beforeHit[A_SSTART]) > int(beforeHit[A_SEND]) > int(afterHit[A_SSTART]) - ALLOWED_OVERLAP > int(afterHit[A_SEND]) - ALLOWED_OVERLAP)) \
-                        and (abs(int(beforeHit[A_SEND]) - int(afterHit[A_SSTART])) < MAX_FLANK_DISTANCE):
-                            ET.SubElement(matchingFlanks, 'match', {'leftid': str(b), 'rightid': str(a)})
-                    elif ((int(beforeHit[A_SSTART]) < int(beforeHit[A_SEND]) < int(afterHit[A_SEND]) + ALLOWED_OVERLAP < int(afterHit[A_SSTART]) + ALLOWED_OVERLAP) or 
-                            (int(beforeHit[A_SSTART]) > int(beforeHit[A_SEND]) > int(afterHit[A_SEND]) - ALLOWED_OVERLAP > int(afterHit[A_SSTART]) - ALLOWED_OVERLAP)) \
-                        and (abs(int(beforeHit[A_SEND]) - int(afterHit[A_SSTART])) < MAX_FLANK_DISTANCE):
-                            ET.SubElement(matchingFlanks, 'inversion', {'leftid': str(b), 'rightid': str(a)})
-
-#             for b in before:
-#                 for a in after:
-#                     if b[3] == a[3]:  # same chr
-#                         if ((b[1] < b[2] < a[1] + 20 < a[2] + 20) or (b[1] > b[2] > a[1] + 20 > a[2] + 20)) and (abs(b[2] - a[1]) < 10000):
-#                             ET.SubElement(matchingFlanks, 'match', {'leftid': str(b[0]), 'rightid': str(a[0])})
-                            
+                                        
             for indices, name in [(before, 'vectorhitleft'), (after, 'vectorhitright'), (overlap, 'vectorhitoverlap')]:
                 for i in indices:
                     aedesHit = aedesHits[contig][i]
                     aedesElement = ET.SubElement(contigTree, name, {'id': str(i), 'seqid': aedesHit[A_SEQID]})
                     ET.SubElement(aedesElement, 'qstart').text = aedesHit[A_QSTART]
                     ET.SubElement(aedesElement, 'qend').text = aedesHit[A_QEND]
-                    ET.SubElement(aedesElement, 'qseq').text = aedesHit[A_QSEQ]
+#                    ET.SubElement(aedesElement, 'qseq').text = aedesHit[A_QSEQ]
                     ET.SubElement(aedesElement, 'sstart').text = aedesHit[A_SSTART]
                     ET.SubElement(aedesElement, 'send').text = aedesHit[A_SEND]
-                    ET.SubElement(aedesElement, 'sseq').text = aedesHit[A_SSEQ]
+#                    ET.SubElement(aedesElement, 'sseq').text = aedesHit[A_SSEQ]
                     ET.SubElement(aedesElement, 'evalue').text = aedesHit[A_EVALUE]
                     ET.SubElement(aedesElement, 'bitscore').text = aedesHit[A_BITSCORE]
                     
@@ -705,6 +590,32 @@ def getHits(dirName, virusName, minLength, evalueA): #, maxFlankingHits):
 #                     ET.SubElement(aedesElement, 'sseq').text = afterHit[6]
 #                     ET.SubElement(aedesElement, 'evalue').text = afterHit[7]
 #                     ET.SubElement(aedesElement, 'bitscore').text = afterHit[8]
+
+            matchingFlanks = ET.SubElement(contigTree, 'flanks')
+            # find pairs of before/after aedes hits that are on the same strand and within 10Kbp of each other
+            for b in before:
+                beforeHit = aedesHits[contig][b]
+                for a in after:
+                    afterHit = aedesHits[contig][a]
+                    if beforeHit[A_SEQID] == afterHit[A_SEQID]:  # same chr
+                        beforeStart = int(beforeHit[A_SSTART])
+                        beforeEnd = int(beforeHit[A_SEND])
+                        afterStart = int(afterHit[A_SSTART])
+                        afterEnd = int(afterHit[A_SEND])
+                        flankDistance = max(beforeStart, beforeEnd, afterStart, afterEnd) - min(beforeStart, beforeEnd, afterStart, afterEnd)
+                        if flankDistance <= MAX_FLANK_DISTANCE:
+                            if (beforeStart < beforeEnd < afterStart + ALLOWED_OVERLAP < afterEnd + ALLOWED_OVERLAP) or \
+                               (beforeStart > beforeEnd > afterStart - ALLOWED_OVERLAP > afterEnd - ALLOWED_OVERLAP):
+                                ET.SubElement(matchingFlanks, 'match', {'leftid': str(b), 'rightid': str(a)})
+                            else:
+                                ET.SubElement(matchingFlanks, 'inversion', {'leftid': str(b), 'rightid': str(a)})
+
+#             for b in before:
+#                 for a in after:
+#                     if b[3] == a[3]:  # same chr
+#                         if ((b[1] < b[2] < a[1] + 20 < a[2] + 20) or (b[1] > b[2] > a[1] + 20 > a[2] + 20)) and (abs(b[2] - a[1]) < 10000):
+#                             ET.SubElement(matchingFlanks, 'match', {'leftid': str(b[0]), 'rightid': str(a[0])})
+
      
     tree.write(xmlFilename, xml_declaration=True, pretty_print=True)
     
@@ -935,22 +846,28 @@ def displayXML(fileName, outFileName, displaySeq = True):
                 if len(hits) > 0:
                     hitsDict = {}  # consolidate query hit: [subject hits]
                     for v in hits:
-                        pos = (v.find('qstart').text, v.find('qend').text, v.find('qseq').text)
+                        pos = (v.find('qstart').text, v.find('qend').text)
+#                        pos = (v.find('qstart').text, v.find('qend').text, v.find('qseq').text)
                         features = v.findall('feature')
                         featureString = '| '
                         for f in features:
                             featureString += f.attrib['type'] + '; ' + f.find('id').text + '; ' + f.find('location').text + ' | '
+
                         if pos not in hitsDict:
-                            hitsDict[pos] = [(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString)]
+                            hitsDict[pos] = [(v.find('sstart').text, v.find('send').text, v.attrib['seqid'], featureString)]
+#                            hitsDict[pos] = [(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString)]
                         else:
-                            hitsDict[pos].append((v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
+                            hitsDict[pos].append((v.find('sstart').text, v.find('send').text, v.attrib['seqid'], featureString))
+#                            hitsDict[pos].append((v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
                     outFile.write('   Vector hits ' + locString + ': \n')
                     posSort = list(hitsDict.keys())
                     posSort.sort(key = lambda pos: (int(pos[0]), int(pos[1])))
                     for q in posSort:
-                        outFile.write('      contig         {0:>9} - {1:<9} {2}\n'.format(*q))
+                        outFile.write('      contig         {0:>9} - {1:<9}\n'.format(*q))
+#                        outFile.write('      contig         {0:>9} - {1:<9} {2}\n'.format(*q))
                         for s in hitsDict[q]:
-                            outFile.write('      {3:<14} {0:>9} - {1:<9} {2} {4}\n'.format(*s))
+                            outFile.write('      {2:<14} {0:>9} - {1:<9} {3}\n'.format(*s))
+#                            outFile.write('      {3:<14} {0:>9} - {1:<9} {2} {4}\n'.format(*s))
                         outFile.write('\n')
 
 #             hitsLeft = contig.findall('vectorhitleft')
@@ -1018,55 +935,62 @@ def displayXML(fileName, outFileName, displaySeq = True):
 # #                         outFile.write('\n')
 
             flanks = contig.find('flanks')
-            matches = flanks.findall('match')
-            if len(matches) > 0:
-                outFile.write('   Matching flanking regions: \n')
-                counter = 0
-                for match in matches:
-                    outFile.write('      *** HIT ' + str(counter) + ' ***\n')
-                    for v in hitsLeft:
-                        if v.attrib['id'] == match.attrib['leftid']:
-                            features = v.findall('feature')
-                            featureString = '| '
-                            for f in features:
-#                                 if displaySeq:
-                                featureString += f.attrib['type'] + '; ' + f.find('id').text + '; ' + f.find('location').text + ' | '
-#                                 else:
-#                                     featureString += f.attrib['type'] + '; ' + f.find('id').text + ' | '
-#                             if displaySeq:
-                            outFile.write('         contig         {0:>9} - {1:<9} {2}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
-                            outFile.write('         {3:<14} {0:>9} - {1:<9} {2} {4}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
-#                             else:
-#                                 outFile.write('         contig         {0:>9} - {1:<9}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
-#                                 outFile.write('         {3:<14} {0:>9} - {1:<9} {4}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
-                            break
+            for matches, message in [(flanks.findall('match'), 'Matching flanking regions:'), (flanks.findall('inversion'), 'Inverted matching flanking regions:')]:
+                if len(matches) > 0:
+                    outFile.write('   ' + message + '\n')
+                    counter = 0
+                    for match in matches:
+                        outFile.write('      *** HIT ' + str(counter) + ' ***\n')
+                        for v in hitsLeft:
+                            if v.attrib['id'] == match.attrib['leftid']:
+                                features = v.findall('feature')
+                                featureString = '| '
+                                for f in features:
+    #                                 if displaySeq:
+                                    featureString += f.attrib['type'] + '; ' + f.find('id').text + '; ' + f.find('location').text + ' | '
+    #                                 else:
+    #                                     featureString += f.attrib['type'] + '; ' + f.find('id').text + ' | '
+    #                             if displaySeq:
+                                outFile.write('         contig         {0:>9} - {1:<9}\n'.format(v.find('qstart').text, v.find('qend').text))
+                                outFile.write('         {2:<14} {0:>9} - {1:<9} {3}\n\n'.format(v.find('sstart').text, v.find('send').text, v.attrib['seqid'], featureString))
+    #                            outFile.write('         contig         {0:>9} - {1:<9} {2}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
+    #                            outFile.write('         {3:<14} {0:>9} - {1:<9} {2} {4}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
+
+    #                             else:
+    #                                 outFile.write('         contig         {0:>9} - {1:<9}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
+    #                                 outFile.write('         {3:<14} {0:>9} - {1:<9} {4}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
+                                break
                         
-                    for v in contig.findall('virushit'):
-#                         if displaySeq:
-                        outFile.write('         contig         {0:>9} - {1:<9} {2}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
-                        outFile.write('         {3:<14} {0:>9} - {1:<9} {2}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid']))
-#                         else:
-#                             outFile.write('         contig         {0:>9} - {1:<9}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
-#                             outFile.write('         {3:<14} {0:>9} - {1:<9}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid']))
-
-                    for v in hitsRight:
-                        if v.attrib['id'] == match.attrib['rightid']:
-                            features = v.findall('feature')
-                            featureString = '| '
-                            for f in features:
-#                                 if displaySeq:
-                                featureString += f.attrib['type'] + '; ' + f.find('id').text + '; ' + f.find('location').text + ' | '
-#                                 else:
-#                                     featureString += f.attrib['type'] + '; ' + f.find('id').text + ' | '
-
-#                             if displaySeq:
+                        for v in contig.findall('virushit'):
+    #                         if displaySeq:
                             outFile.write('         contig         {0:>9} - {1:<9} {2}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
-                            outFile.write('         {3:<14} {0:>9} - {1:<9} {2} {4}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
-#                             else:
-#                                 outFile.write('         contig         {0:>9} - {1:<9}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
-#                                 outFile.write('         {3:<14} {0:>9} - {1:<9} {4}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
-                            break
-                    counter += 1
+                            outFile.write('         {3:<14} {0:>9} - {1:<9} {2}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid']))
+
+    #                         else:
+    #                             outFile.write('         contig         {0:>9} - {1:<9}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
+    #                             outFile.write('         {3:<14} {0:>9} - {1:<9}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid']))
+
+                        for v in hitsRight:
+                            if v.attrib['id'] == match.attrib['rightid']:
+                                features = v.findall('feature')
+                                featureString = '| '
+                                for f in features:
+    #                                 if displaySeq:
+                                    featureString += f.attrib['type'] + '; ' + f.find('id').text + '; ' + f.find('location').text + ' | '
+    #                                 else:
+    #                                     featureString += f.attrib['type'] + '; ' + f.find('id').text + ' | '
+
+    #                             if displaySeq:
+                                outFile.write('         contig         {0:>9} - {1:<9}\n'.format(v.find('qstart').text, v.find('qend').text))
+                                outFile.write('         {2:<14} {0:>9} - {1:<9} {3}\n\n'.format(v.find('sstart').text, v.find('send').text, v.attrib['seqid'], featureString))
+    #                            outFile.write('         contig         {0:>9} - {1:<9} {2}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
+    #                            outFile.write('         {3:<14} {0:>9} - {1:<9} {2} {4}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
+
+    #                             else:
+    #                                 outFile.write('         contig         {0:>9} - {1:<9}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
+    #                                 outFile.write('         {3:<14} {0:>9} - {1:<9} {4}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
+                                break
+                        counter += 1
         
         featureSummary = contig.find('featuresummary')
         if featureSummary is not None:
@@ -1099,13 +1023,13 @@ def displayXML(fileName, outFileName, displaySeq = True):
             outFile.write('      {0:>18}: {1:>7}  {2:>7.2%}\n'.format(f, totalCounts[f], totalCounts[f] / totalFeatures))
     outFile.close()
     
-def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
-    """Write XML results to human-readable text file.
+def drawXML(fileName, outputDir, bestHitsOnly = True):
+    """Draw diagrams of contigs from XML file.
     
        Parameters:
-           fileName:    absolute path of XML results file
-           outFileName: absolute path of output text file
-           displaySeq:  whether to write long version with all sequence alignments
+           fileName:      absolute path of XML results file
+           outputDir:     absolute path of output directory
+           bestHitsOnly:  whether to draw all hits or only the best hits
            
        Return value: None
     """
@@ -1115,7 +1039,7 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
     if not Path(outputDir).exists():
         os.mkdir(outputDir)
     else:
-        os.system('rm ' + outputDir + '/*/*.png')
+        os.system('rm -r ' + outputDir + '/*')
         
     fams = readFamFile()
     
@@ -1127,6 +1051,10 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
     contigFeaturesA = {}
     contigLengths = {}
     families = {}
+    
+    labelFontSize = 6
+    axesFontSize = 8
+    thickness = 12
     
     tree = ET.parse(fileName)
     root = tree.getroot()
@@ -1176,7 +1104,7 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
 #            if v.attrib['maxbitscore'] == 'True':
             stitle += ' (' + str(seqid) + ')'
             if not bestHitsOnly and (contig.attrib['besthit'] == 'True'):
-                stitle = '**' + stitle.lstrip('|') + '**'
+#                stitle = '**' + stitle.lstrip('|') + '**'
                 
                 if seqid not in fams:
                     fam = getFamily(seqid)
@@ -1188,10 +1116,14 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
                 strand = 1
             else:
                 strand = -1
-            features.append(GraphicFeature(start=qstart, end=qend, strand=strand, 
-                                           color='#ff0000', fontdict = {'size': 9},
-                                           label = stitle.lstrip('|') + ' ' + str(sstart) + '-' + str(send) + ' (' + strandStr + '; ' + str(length) + ' bp; ' + str(pident) + '%)'))  #; ' + str(evalue) + ')'))
-            contigFeaturesV[c].append(copy.deepcopy(features[-1]))
+            gf = GraphicFeature(start=qstart, end=qend, strand=strand, thickness=thickness, linewidth=0,
+                                           color='#ff0000', fontdict = {'size': labelFontSize},
+                                           label = stitle.lstrip('|') + ' ' + str(sstart) + '-' + str(send) + ' (' + str(length) + ' bp; ' + str(pident) + '%)')  #; ' + str(evalue) + ')')
+            features.append(gf)
+            gfCopy = copy.deepcopy(gf)
+            if not bestHitsOnly and (contig.attrib['besthit'] == 'True'):
+                gfCopy.label = '**' + stitle.lstrip('|') + '** ' + str(sstart) + '-' + str(send) + ' (' + str(length) + ' bp; ' + str(pident) + '%)'
+            contigFeaturesV[c].append(gfCopy)
         families[c] = family
         hitsLeft = contig.findall('vectorhitleft')
         hitsRight = contig.findall('vectorhitright')
@@ -1201,7 +1133,7 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
         hitsDone = []
         if len(matches) > 0:
             matchCount = 1
-            for match in matches[:flankLimit]:
+            for match in matches[:FLANK_DRAW_LIMIT]:
                 for hits, attribName in [(hitsLeft, 'leftid'), (hitsRight, 'rightid')]:
                     for v in hits:
                         if v.attrib['id'] == match.attrib[attribName]:
@@ -1223,16 +1155,16 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
                                 seqid = chromNames[seqid]
                             elif seqid[:8] == 'NW_01873':
                                 seqid = 'Scaffold ' + seqid[8:12]
-                            features.append(GraphicFeature(start=qstart, end=qend, strand=strand, 
-                                                       color='#777777', fontdict = {'size': 8},
-                                                       label = 'M' + str(matchCount) + ': ' + seqid + ' ' + str(sstart) + '-' + str(send) + ' (' + strandStr + ')'))
+                            features.append(GraphicFeature(start=qstart, end=qend, strand=strand, thickness=thickness, linewidth=0,
+                                                       color='#009051', fontdict = {'size': labelFontSize},
+                                                       label = 'M' + str(matchCount) + ': ' + seqid + ' {0:,}-{1:,} '.format(sstart, send) + '(' + strandStr + ')'))
                             break
                 matchCount += 1
                 
         inversions = flanks.findall('inversion')
         if len(inversions) > 0:
             matchCount = 1
-            for match in inversions[:flankLimit]:
+            for match in inversions[:max(0, FLANK_DRAW_LIMIT - len(matches))]:
                 for hits, attribName in [(hitsLeft, 'leftid'), (hitsRight, 'rightid')]:
                     for v in hits:
                         if v.attrib['id'] == match.attrib[attribName]:
@@ -1254,9 +1186,9 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
                                 seqid = chromNames[seqid]
                             elif seqid[:8] == 'NW_01873':
                                 seqid = 'Scaffold ' + seqid[8:12]
-                            features.append(GraphicFeature(start=qstart, end=qend, strand=strand, 
-                                                       color='#333333', fontdict = {'size': 8},
-                                                       label = 'I' + str(matchCount) + ': ' + seqid + ' ' + str(sstart) + '-' + str(send) + ' (' + strandStr + ')'))
+                            features.append(GraphicFeature(start=qstart, end=qend, strand=strand, thickness=thickness, linewidth=0,
+                                                       color='indigo', fontdict = {'size': labelFontSize},
+                                                       label = 'I' + str(matchCount) + ': ' + seqid + ' {0:,}-{1:,} '.format(sstart, send) + '(' + strandStr + ')'))
                             break
                 matchCount += 1
 
@@ -1265,7 +1197,8 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
             if len(hits) > 0:
                 hitsDict = {}  # consolidate query hit: [subject hits]
                 for v in hits:
-                    pos = (v.find('qstart').text, v.find('qend').text, v.find('qseq').text)
+                    pos = (v.find('qstart').text, v.find('qend').text)
+#                    pos = (v.find('qstart').text, v.find('qend').text, v.find('qseq').text)
                     for x in range(int(pos[0]), int(pos[1])):
                         aaCoverage[x] += 1
                     if v.attrib['id'] in hitsDone:
@@ -1281,15 +1214,17 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
 #                         featType = f.attrib['type']
                         
                     if pos not in hitsDict:
-                        hitsDict[pos] = [(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'])] #, featureString)]
+                        hitsDict[pos] = [(v.find('sstart').text, v.find('send').text, v.attrib['seqid'])] #, featureString)]
+#                        hitsDict[pos] = [(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'])] #, featureString)]
                     else:
-                        hitsDict[pos].append((v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'])) #, featureString))
+                        hitsDict[pos].append((v.find('sstart').text, v.find('send').text, v.attrib['seqid'])) #, featureString))
+#                        hitsDict[pos].append((v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'])) #, featureString))
                 posSort = list(hitsDict.keys())
                 if hits != hitsRight:
-                    posSort.sort(key = lambda pos: (int(pos[1]), int(pos[0])), reverse = True)  # closest first
+                    posSort.sort(key = lambda pos: int(pos[1]), reverse = True)  # closest first
                 else:
-                    posSort.sort(key = lambda pos: (int(pos[0]), int(pos[1])))  # closest first
-                for q in posSort[:max(0, flankLimit-len(matches))]:
+                    posSort.sort(key = lambda pos: int(pos[0]))  # closest first
+                for q in posSort[:max(0, FLANK_DRAW_LIMIT - len(matches) - len(inversions))]:
                     qstart = int(q[0])
                     qend = int(q[1])
                     if qend > qstart:
@@ -1298,13 +1233,13 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
                         strand = -1
     #                for s in hitsDict[q]:
                     s = hitsDict[q][0]
-                    sstart = s[0]
-                    send = s[1]
+                    sstart = int(s[0])
+                    send = int(s[1])
                     if send > sstart:
                         strandStr = '+'
                     else:
                         strandStr = '-'
-                    seqid = s[3]
+                    seqid = s[2]
 #                     if len(hitsDict[q]) > 1:
 #                         send += '*'
                     if seqid in chromNames:
@@ -1315,9 +1250,9 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
                         color = '#00ff00'
                     else:
                         color = '#0000ff'
-                    features.append(GraphicFeature(start=qstart, end=qend, strand=strand, 
-                                               color=color, fontdict = {'size': 8},
-                                               label = seqid + ' ' + sstart + '-' + send + ' (' + strandStr + ')'))
+                    features.append(GraphicFeature(start=qstart, end=qend, strand=strand, thickness=thickness, linewidth=0,
+                                               color=color, fontdict = {'size': labelFontSize},
+                                               label = seqid + ' {0:,}-{1:,} '.format(sstart, send) + '(' + strandStr + ')'))
                                 
         record = GraphicRecord(sequence_length = contigLength, features = features)
         
@@ -1326,16 +1261,24 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
         record.plot(max_label_length = 80, ax = ax1, with_ruler = False)
         ax2.fill_between(range(contigLength), aaCoverage, step = 'mid', alpha = 0.3)
 #        ax2.scatter(range(contigLength), aaCoverage)
-        ax2.set_ylim(bottom = 0)
-        ax2.set_ylabel('Aa hits')
+        ax2.tick_params(axis='both', which='major', labelsize=axesFontSize)
+        ax2.set_ylim(bottom = 0, top = max(aaCoverage + [1]))
+        ax2.set_yticks([0, max(aaCoverage + [1]) // 2, max(aaCoverage + [1])])
+        ax2.set_ylabel('Aa hits', fontsize = axesFontSize)
 
         familyDir = str(Path(outputDir) / family)
         if not Path(familyDir).exists():
             os.mkdir(familyDir)
         if contig.attrib['besthit'] == 'True':
-            fig.savefig(Path(familyDir) / (contig.attrib['name'] + '_BEST-HIT.png'))
+            pp = PdfPages(str(Path(familyDir) / (contig.attrib['name'] + '_BEST-HIT.pdf')))
+            pp.savefig(fig)
+            pp.close()
+#            fig.savefig(Path(familyDir) / (contig.attrib['name'] + '_BEST-HIT.pdf'))
         else:
-            fig.savefig(Path(familyDir) / (contig.attrib['name'] + '.png'))
+            pp = PdfPages(str(Path(familyDir) / (contig.attrib['name'] + '.pdf')))
+            pp.savefig(fig)
+            pp.close()
+#            fig.savefig(Path(familyDir) / (contig.attrib['name'] + '.pdf'))
         pyplot.close(fig)
         
     if not bestHitsOnly:
@@ -1348,22 +1291,15 @@ def drawXML(fileName, outputDir, flankLimit, bestHitsOnly = True):
     #        ax2.set_ylabel('Aa hits')
 
             familyDir = str(Path(outputDir) / families[c])
-            ax.figure.savefig(Path(familyDir) / (c + '_all-viral-hits.png'))
+            pp = PdfPages(str(Path(familyDir) / (c + '_all-viral-hits.pdf')))
+            pp.savefig(ax.figure)
+            pp.close()
+#            ax.figure.savefig(Path(familyDir) / (c + '_all-viral-hits.pdf'))
             pyplot.close(ax.figure)
                     
 ###############################################################################
 
-def copyResults():
-    if Path(RESULTS_DIR).exists():
-        answer = ' '
-        while answer not in 'yYnN':
-            answer = input('Results directory exists.  Overwrite (y/n)? ')
-        if answer[0] not in 'yY':
-            writelog('OK, quitting.', True)
-            return False
-    else:
-        os.system('mkdir ' + RESULTS_DIR)
-        
+def copyResults():    
     SPECIMENS_DIR = RESULTS_DIR + 'specimens/'
     if not Path(SPECIMENS_DIR).exists():
         os.system('mkdir ' + SPECIMENS_DIR)
@@ -1385,7 +1321,7 @@ def copyResults():
         os.system('cp ' + str(dir / 'spades_all') + '/*_all_hits*.txt ' + SPECIMENS_DIR + dir.name + '/txt')
         os.system('cp ' + str(dir / 'spades_all') + '/scaffolds.fasta ' + SPECIMENS_DIR + dir.name + '/scaffolds')
         os.system('cp ' + str(dir / 'spades_all') + '/blast_scaffolds_all.csv ' + SPECIMENS_DIR + dir.name + '/scaffolds')
-        os.system('cp -r ' + str(dir / 'spades_all') + '/png/* ' + SPECIMENS_DIR + dir.name + '/diagrams')
+        os.system('cp -r ' + str(dir / 'spades_all') + '/diagrams/* ' + SPECIMENS_DIR + dir.name + '/diagrams')
 #        os.system('cp ' + ROOT + '/../results/HITS_all/' + dir.name + '_all_hits.fasta ' + SPECIMENS_DIR + dir.name + '/sequences')
         
     return True
@@ -1401,6 +1337,380 @@ def reverseComplement(dna):
 	for base in reversed(dna):
 		complement = complement + basecomplement.get(base, base)
 	return complement
+
+# def drawInsertSites(insertSites, seqid, stitle, familyDir):
+#     lengths = {'NC_035107.1': 310827022, 'NC_035108.1': 474425716, 'NC_035109.1': 409777670}
+#     chromNumber = {'NC_035107.1': 1, 'NC_035108.1': 2, 'NC_035109.1': 3}
+#     
+#     y = 0
+#     yvalues = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+#     xvalues = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+#     ylabels  = []
+#     colors = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+#     sortedSpecimens = list(insertSites[(seqid, stitle)].keys())
+#     specimenLabels = {}
+#     for specimen in sortedSpecimens:
+#         specimenLabels[specimen] = getSpecimenLabel(specimen)
+#     sortedSpecimens.sort(key=lambda s: specimenLabels[s], reverse=True)
+#     for specimen in sortedSpecimens:
+#         for contig in insertSites[(seqid, stitle)][specimen]:
+#             for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['left']:
+#                 if chromID in lengths:
+#                     yvalues[chromID].append(y)
+#                     xvalues[chromID].append(position)
+#                     colors[chromID].append('#929000')
+#             for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['right']:
+#                 if chromID in lengths:
+#                     yvalues[chromID].append(y)
+#                     xvalues[chromID].append(position)
+#                     colors[chromID].append('#ff2600')
+#             for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['match']:
+#                 if chromID in lengths:
+#                     yvalues[chromID].append(y)
+#                     xvalues[chromID].append(position[0])
+#                     colors[chromID].append('#ff40ff')
+#             for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['inversion']:
+#                 if chromID in lengths:
+#                     yvalues[chromID].append(y)
+#                     xvalues[chromID].append(position[0])
+#                     colors[chromID].append('#5e5e5e')
+#             y += 1
+#             region, num = specimenLabels[specimen]
+#             ylabels.append(region + ' ' + str(num) + ' ' + contig)
+#             
+#     for chromID in yvalues:
+#         fig = pyplot.figure(figsize=(7, 10))
+#         pyplot.scatter(xvalues[chromID], yvalues[chromID], color=colors[chromID], s = 1)
+#         pyplot.tick_params(labelsize = 3)
+#         pyplot.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99)
+#         pyplot.yticks(range(y), ylabels)
+#         pyplot.xticks(range(int(1e8), lengths[chromID], int(1e8)), [str(x)+'M' for x in range(100, lengths[chromID] // int(1e6), 100)])
+#         fig.suptitle('EVE insertion positions for ' + seqid + ' in chromosome ' + str(chromNumber[chromID]), fontsize = 6, fontweight = 'bold', y = 0.98)
+#         
+#         pp = PdfPages(familyDir + '/insertpositions_' + seqid + '_chr' + str(chromNumber[chromID]) + '.pdf')
+#         pp.savefig(fig)
+#         pp.close()
+# #        pyplot.savefig('insertpositions_' + seqid + '.pdf')
+#         pyplot.close(fig)
+        
+def drawInsertSites(clusteredFileName, insertSites, seqid, stitle, specimen2Label, familyDir):
+    lengths = {'NC_035107.1': 310827022, 'NC_035108.1': 474425716, 'NC_035109.1': 409777670}
+    chromNumber = {'NC_035107.1': 1, 'NC_035108.1': 2, 'NC_035109.1': 3}
+    
+    aln = AlignIO.read(clusteredFileName, 'fasta') # Bio.Align.MultipleSeqAlignment object
+    
+    y = 0
+    yvalues = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+    xvalues = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+    ylabels  = []
+    colors = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+    positions = {} # {'NC_035107.1': {}, 'NC_035108.1': {}, 'NC_035109.1': {}}
+        
+    for i in range(1, len(aln)):
+        desc = aln[i].description
+        parts = desc.split('_|_')
+        cluster = parts[0]
+        specimen = parts[1]
+        contig = parts[2]
+        
+        region, num = specimen2Label[specimen]
+        ylabels.append(cluster + ' ' + region + ' ' + str(num) + ' ' + contig)
+        
+        if cluster not in yvalues:
+            yvalues[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+            xvalues[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+            colors[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+            positions[cluster] = {'NC_035107.1': {}, 'NC_035108.1': {}, 'NC_035109.1': {}}
+#            ylabels[cluster] = []
+#            y[cluster] = 0
+        
+        for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['left']:
+            if chromID in lengths:
+                yvalues[cluster][chromID].append(y)
+                xvalues[cluster][chromID].append(position)
+                colors[cluster][chromID].append('#929000')
+                if position not in positions[cluster][chromID]:
+                    positions[cluster][chromID][position] = []
+                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'left'))
+        for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['right']:
+            if chromID in lengths:
+                yvalues[cluster][chromID].append(y)
+                xvalues[cluster][chromID].append(position)
+                colors[cluster][chromID].append('#ff2600')
+                if position not in positions[cluster][chromID]:
+                    positions[cluster][chromID][position] = []
+                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'right'))
+        for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['match']:
+            if chromID in lengths:
+                if position[0] > position[1]:
+                    position = position[::-1]
+                yvalues[cluster][chromID].append(y)
+                xvalues[cluster][chromID].append(position[0])
+                colors[cluster][chromID].append('#ff40ff')
+                if position not in positions[cluster][chromID]:
+                    positions[cluster][chromID][position] = []
+                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'match'))
+        for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['inversion']:
+            if chromID in lengths:
+                if position[0] > position[1]:
+                    position = position[::-1]
+                yvalues[cluster][chromID].append(y)
+                xvalues[cluster][chromID].append(position[0])
+                colors[cluster][chromID].append('#5e5e5e')
+                if position not in positions[cluster][chromID]:
+                    positions[cluster][chromID][position] = []
+                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'inversion'))
+        y += 1
+        
+    fig, ax = pyplot.subplots(1, 3, sharey = True, figsize = (7, 10), gridspec_kw = {'width_ratios': [1, lengths['NC_035108.1']/lengths['NC_035107.1'], lengths['NC_035109.1']/lengths['NC_035107.1']]})
+    fig.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99, wspace = 0.0)
+    ax[0].set_yticks(range(len(aln) - 1))
+    ax[0].set_yticklabels(ylabels)
+    ax[0].set_ylim(0, len(aln) - 1)
+    ax[0].invert_yaxis()
+    chrCount = 0
+    xtickPositions = [[0, int(1e8), int(2e8), int(3e8)], [0, int(1e8), int(2e8), int(3e8), int(4e8)], [0, int(1e8), int(2e8), int(3e8), int(4e8)]]
+    xtickLabels = [['', '100M', '200M', '300M'], ['', '100M', '200M', '300M', '400M'], ['', '100M', '200M', '300M', '400M']]
+    for chromID in lengths:
+        for cluster in yvalues:
+            ax[chrCount].scatter(xvalues[cluster][chromID], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
+        ax[chrCount].tick_params(labelsize = 3)
+        if chrCount > 0:
+            ax[chrCount].tick_params(left=False)
+        #pyplot.axvline(x = lengths['NC_035107.1'], linewidth=0.5, color='black')
+        #pyplot.axvline(x = lengths['NC_035107.1'] + lengths['NC_035108.1'], linewidth=0.5, color='black')
+        #pyplot.xticks(range(int(1e8), sum(lengths.values()), int(1e8)), [str(x)+'M' for x in range(100, lengths['NC_035107.1'] // int(1e6), 100)])
+        ax[chrCount].set_xticks(xtickPositions[chrCount])
+        ax[chrCount].set_xticklabels(xtickLabels[chrCount])
+        ax[chrCount].set_xlim(0, lengths[chromID])
+        ax[chrCount].set_xlabel('Chromosome ' + str(chrCount + 1), fontsize=4)
+        chrCount += 1
+
+#     fig = pyplot.figure(figsize=(7, 10))
+#     xoffset = 0
+#     for chromID in lengths:
+#         for cluster in yvalues:
+#             pyplot.scatter([x + xoffset for x in xvalues[cluster][chromID]], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
+#         xoffset += lengths[chromID]
+#             
+#     pyplot.tick_params(labelsize = 3)
+#     pyplot.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99)
+#     pyplot.yticks(range(len(aln) - 1), ylabels)
+#     pyplot.gca().invert_yaxis()
+#     pyplot.axvline(x = lengths['NC_035107.1'], linewidth=0.5, color='black')
+#     pyplot.axvline(x = lengths['NC_035107.1'] + lengths['NC_035108.1'], linewidth=0.5, color='black')
+#     #pyplot.xticks(range(int(1e8), sum(lengths.values()), int(1e8)), [str(x)+'M' for x in range(100, lengths['NC_035107.1'] // int(1e6), 100)])
+#     xtickPositions = [0, int(1e8), int(2e8), int(3e8), lengths['NC_035107.1']+int(1e8), lengths['NC_035107.1']+int(2e8), lengths['NC_035107.1']+int(3e8), lengths['NC_035107.1']+int(4e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(1e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(2e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(3e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(4e8)]
+#     xtickLabels = ['0', '100M', '200M', '300M', '100M', '200M', '300M', '400M', '100M', '200M', '300M', '400M']
+#     pyplot.xticks(xtickPositions, xtickLabels)
+#     pyplot.xlim(0, sum(lengths.values()))
+    fig.suptitle('EVE insertion positions for ' + seqid, fontsize = 6, fontweight = 'bold', y = 0.98)
+
+    saveFileName = familyDir + '/insertpositions_' + seqid
+    pp = PdfPages(saveFileName + '.pdf')
+    pp.savefig(fig)
+    pp.close()
+    pyplot.close(fig)
+
+    for chromID in lengths:
+        textPositionFile = open(saveFileName + '_chr' + str(chromNumber[chromID]) + '.txt', 'w')
+        for cluster in positions:
+            textPositionFile.write('Cluster ' + cluster[1:] + '\n')
+            sortedPositions = list(positions[cluster][chromID].keys())
+            sortedPositions.sort(key=lambda x: x[0] if isinstance(x, tuple) else x)
+            for position in sortedPositions:
+                if len(positions[cluster][chromID][position]) >= MIN_HITS_TO_SHOW_POSITION:
+                    textPositionFile.write(str(position) + '\t')
+                    countsByRegion = {}
+                    line = '\t'
+                    for specimen, contig, type in positions[cluster][chromID][position]:
+                        region = specimen.split('_')[0]
+                        if region not in countsByRegion:
+                            countsByRegion[region] = 0
+                        countsByRegion[region] += 1
+                        if isinstance(position, tuple):
+                            line += specimen + ' (' + type + ')\t'   # include match/inversion if tuple
+                        else:
+                            line += specimen + '\t'
+                    for region in countsByRegion:
+                        line = ', ' + region + ': ' + str(countsByRegion[region]) + line
+                    textPositionFile.write(line[2:] + '\n')
+        textPositionFile.close()
+
+#     textPositionFile = open(saveFileName + '.txt', 'w')
+#     for index in range(len(aln) - 1):
+#         textPositionFile.write(ylabels[index] + '\t')
+#         for index2 in range(len(yvalues[cluster][chromID])):
+#             if yvalues[cluster][chromID][index2] == index:
+#                 textPositionFile.write(str(xvalues[cluster][chromID][index2]) + '\t')
+#         textPositionFile.write('\n')
+#     textPositionFile.close()
+    
+    # for chromID in lengths:
+#         for cluster in yvalues:
+#             fig = pyplot.figure(figsize=(7, 10))
+#             pyplot.scatter(xvalues[cluster][chromID], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
+#             pyplot.tick_params(labelsize = 3)
+#             pyplot.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99)
+#             pyplot.yticks(range(y[cluster]), ylabels[cluster])
+#             pyplot.xticks(range(int(1e8), lengths[chromID], int(1e8)), [str(x)+'M' for x in range(100, lengths[chromID] // int(1e6), 100)])
+#             fig.suptitle('EVE insertion positions for ' + seqid + ', cluster ' + cluster[1:] + ', in chromosome ' + str(chromNumber[chromID]), fontsize = 6, fontweight = 'bold', y = 0.98)
+#         
+#             saveFileName = familyDir + '/insertpositions_' + seqid + '_' + cluster + '_chr' + str(chromNumber[chromID])
+#             pp = PdfPages(saveFileName + '.pdf')
+#             pp.savefig(fig)
+#             pp.close()
+#             pyplot.close(fig)
+# 
+#             textPositionFile = open(saveFileName + '.txt', 'w')
+#             for index in range(y[cluster] - 1, -1, -1):
+#                 textPositionFile.write(ylabels[cluster][index] + '\t')
+#                 for index2 in range(len(yvalues[cluster][chromID])):
+#                     if yvalues[cluster][chromID][index2] == index:
+#                         textPositionFile.write(str(xvalues[cluster][chromID][index2]) + '\t')
+#                 textPositionFile.write('\n')
+#             textPositionFile.close()
+
+def getSeqRecord(fileNameFASTA):
+    try:
+        refFile = open(fileNameFASTA, 'r')
+    except:
+        prefix1 = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
+        prefix2 = '?db=nuccore&id='
+        suffix = '&rettype=fasta&retmode=text'
+        url = prefix1 + prefix2 + seqid + suffix
+        try:
+            fastaFile = web.urlopen(url)
+        except:
+            writelog('Error getting reference sequence ' + seqid + ' from NCBI.  Aligned FASTA file not created.')
+            return None
+        fastaText = fastaFile.read().decode('utf-8')
+        fastaFile.close()
+        refFile = open(fileNameFASTA, 'w')
+        refFile.write(fastaText)
+        refFile.close()
+        refFile = open(fileNameFASTA, 'r')
+        
+    refRecord = SeqIO.read(refFile, 'fasta')
+    refFile.close()
+    
+    return refRecord
+        
+def writeSummaryTable(fileName, viralHits, viralHits0, viralHits1, viralHits2, allFamilies, allViruses, omitInReference):
+    out = open(fileName, 'w')
+
+    famVir = list(zip(allFamilies, allViruses))
+#    famVir.sort()
+        
+    specimens = list(viralHits.keys())
+    specimenLabels = {}
+    for specimen in specimens:
+        specimenLabels[getSpecimenLabel(specimen)] = specimen
+    specimenLabelsList = list(specimenLabels.keys())
+    specimenLabelsList.sort()
+    
+    counts = {}
+    for fam, (stitle, seqid) in famVir:
+        counts[(fam, (stitle, seqid))] = 0
+        
+    for region, num in specimenLabelsList:
+        specimen = specimenLabels[(region, num)]
+        for fam, (stitle, seqid) in famVir:
+            foundInSpecimen = False
+            for hit in viralHits[specimen]:  # hit = (seqid, stitle, hitDict) in one contig
+                if hit[0] == seqid:
+                    if omitInReference and (specimen in viralHits0) and (hit in viralHits0[specimen]):  # overlapping vector hit
+                        continue
+                    foundInSpecimen = True
+                    break
+            if foundInSpecimen:
+                counts[(fam, (stitle, seqid))] += 1
+                
+    newFamVir = []
+    for fam, (stitle, seqid) in famVir:
+        if counts[(fam, (stitle, seqid))] >= MIN_HITS_TO_SHOW_VIRUS:
+            newFamVir.append((fam, (stitle, seqid)))
+    famVir = newFamVir
+    
+    famVir.sort(key=lambda x: x[1][0])                  # sort by stitle
+    famVir.sort(key=lambda x: counts[x], reverse=True)  # then by counts
+    famVir.sort(key=lambda x: x[0])                     # then by family
+    
+    out.write('\t')
+    for fam, (stitle, seqid) in famVir:
+        out.write(seqid + '\t')
+    out.write('\n')
+    out.write('\t')
+    for fam, (stitle, seqid) in famVir:
+        out.write(stitle + '\t')
+    out.write('\n')
+    
+    out.write('\t')
+    for fam, (stitle, seqid) in famVir:
+        out.write(fam + '\t')
+    out.write('\n')
+    
+    # Write total virus hit counts
+    out.write('\t')
+    for fam, (stitle, seqid) in famVir:
+        out.write(str(counts[(fam, (stitle, seqid))]) + '\t')
+    out.write('\n')
+    
+    for region, num in specimenLabelsList:
+        specimen = specimenLabels[(region, num)]
+        out.write(region + ' ' + str(num) + '\t')
+        for fam, (stitle, seqid) in famVir:
+            length = 0
+            rangeList = []
+            for hit in viralHits[specimen]:  # hit = (seqid, stitle, hitDict) in one contig
+                if hit[0] == seqid:
+                    if omitInReference and (specimen in viralHits0) and (hit in viralHits0[specimen]):  # overlapping vector hit
+                        continue
+                    hitDict = hit[2]
+                    qpos = list(hitDict.keys())
+                    qpos.sort()                  # within hit, sort by qstart
+                    s = []
+                    for p in qpos:
+                        length += abs(hitDict[p][1] - hitDict[p][0]) + 1
+                        s.extend([hitDict[p][0], hitDict[p][1]])
+                    if s[0] > s[-1]:
+                        s = s[::-1]
+                    if (specimen in viralHits0) and (hit in viralHits0[specimen]):  # overlapping vector hit
+                        s.append(3)
+                    elif (specimen in viralHits2) and (hit in viralHits2[specimen]):
+                        s.append(2)
+                    elif (specimen in viralHits1) and (hit in viralHits1[specimen]):
+                        s.append(1)
+                    else:
+                        s.append(0)
+                        
+                    if len(hit) > 3:
+                        features = hit[3]
+                    else:
+                        features = []
+                    
+                    featureString = ''
+                    for f in features:
+                        featureString += '{0}: {1:4.2f}, '.format(f[0], f[1])
+                    if len(featureString) > 0:
+                        featureString = featureString[:-2]
+                    s.append(featureString)
+
+                    rangeList.append(s)  # s = (sstart, send, sstart, send, ..., 0/1/2/3, features)   
+                    
+            rangeList.sort()    # among all hits, sort by first sstart
+            rangeString = ''
+            for s in rangeList:
+                for i in range(0, len(s) - 2, 2):
+                    rangeString += str(s[i]) + '-' + str(s[i+1]) + ', '
+                rangeString = rangeString[:-2] + ('*' * s[-2]) + ' (' + s[-1] + ') | '
+            if length > 0:
+                out.write(rangeString[:-1] + '| ' + str(length))
+                counts[(fam, (stitle, seqid))] += 1
+            out.write('\t')
+        out.write(specimen + '\n')
+        
+    out.close()   
 
 def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
     """Consolidate all results for a particular virus.
@@ -1427,11 +1737,12 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
     viralHits1 = {}
     viralHits2 = {}
     viralHits0 = {}   # with AA overlap
-    viralHits = {}  # all together
-    allHits = []
+    viralHits = {}    # all together
+    allHits = []    
     viralSeqs = {}
     refSeqs = {}
     pIdents = {}
+    insertSites = {}
     
     xmlFiles = []
     specimensPath = Path(RESULTS_DIR + 'specimens/').resolve()
@@ -1439,25 +1750,32 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
         for file in (specimenDir / 'xml').iterdir():
             if ('_hits_features.xml' in file.name) or (('_hits.xml' in file.name) and not Path(str(file)[:-4] + '_features.xml').exists()):
                 xmlFiles.append(file.resolve())
+    xmlFiles.sort()
     
+    specimen2Label = {}
+    label2Specimen = {}
+    specimenCount = 1
     for file in xmlFiles:
         specimen = file.name.split('_' + virusName)[0]
+        region, num = getSpecimenLabel(specimen)
+        region = region.replace(' ', '-')
+        specimen2Label[specimen] = (region, num)
+        label2Specimen[(region, num)] = specimen
+        writelog('  Processing ' + str(specimenCount) + '/' + str(len(xmlFiles)) + ': ' + specimen, True)
+        specimenCount += 1
         specimenSequencesDir = RESULTS_DIR + 'specimens/' + specimen + '/sequences/'
         if not Path(specimenSequencesDir).exists():
             os.system('mkdir ' + specimenSequencesDir)
         virus_fasta = open(specimenSequencesDir + specimen + '_' + virusName + '_hits.fasta', 'w')
         virus_fasta_percontig = open(specimenSequencesDir + specimen + '_' + virusName + '_hits2.fasta', 'w')
-#             viralSeqs[specimen] = {}
-#             refSeqs[specimen] = {}
 
         # Parse XML tree.
         
         tree = ET.parse(str(file))
         root = tree.getroot()
-        for contig in root:   # one per virus per contig
-            if bestHitsOnly and (contig.attrib['besthit'] != 'True'):
-                continue
-                
+        for contig in root.iterchildren():   # one per virus per contig
+#         for event, contig in ET.iterparse(str(file)):
+#             if contig.tag == 'contig':
             contigName = contig.attrib['name']
             hit = {}
             v = contig.find('virushit')
@@ -1467,17 +1785,24 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
             stitle = v.attrib['stitle']
             if '|' in stitle:
                 stitle = stitle.lstrip('|')
+            
+            if bestHitsOnly and (contig.attrib['besthit'] != 'True'):  # and (stitle not in PREFERRED_ACCS):  # last condition may result in >1 hit per original contig
+                continue
+            
             if (seqid, stitle) not in viralSeqs:
                 viralSeqs[(seqid, stitle)] = {}
                 refSeqs[(seqid, stitle)] = {}
                 pIdents[(seqid, stitle)] = {}
+                insertSites[(seqid, stitle)] = {}
             if specimen not in viralSeqs[(seqid, stitle)]:
                 viralSeqs[(seqid, stitle)][specimen] = {}
                 refSeqs[(seqid, stitle)][specimen] = {}
                 pIdents[(seqid, stitle)][specimen] = {}
+                insertSites[(seqid, stitle)][specimen] = {}
             viralSeqs[(seqid, stitle)][specimen][contigName] = {}
             refSeqs[(seqid, stitle)][specimen][contigName] = {}
             pIdents[(seqid, stitle)][specimen][contigName] = {}
+            insertSites[(seqid, stitle)][specimen][contigName] = {}
             for v in contig.findall('virushit'):
                 hit[(int(v.find('qstart').text), int(v.find('qend').text))] = (int(v.find('sstart').text), int(v.find('send').text))
                 viralSeqs[(seqid, stitle)][specimen][contigName][(int(v.find('sstart').text), int(v.find('send').text))] = v.find('qseq').text
@@ -1487,7 +1812,7 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
                 virus_fasta.write(v.find('qseq').text + '\n')
                 virus_fasta.write('>' + seqid + '_' + stitle.replace(' ', '-') + '_' + v.find('sstart').text + '-' + v.find('send').text + '_(reference)\n')
                 virus_fasta.write(v.find('sseq').text + '\n')
-            
+        
             qpos = list(hit.keys())
             qpos.sort()
             combinedSeq = ''
@@ -1508,7 +1833,60 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
 #                     hit = hit[::-1]
 #                hit = tuple(hit)
 
-            numVectorHits = len(contig.findall('vectorhitleft') + contig.findall('vectorhitright'))
+            recordedIDs = []
+            insertSites[(seqid, stitle)][specimen][contigName]['match'] = []
+            flanks = contig.find('flanks')
+            vectorHitsLeft = contig.findall('vectorhitleft')
+            vectorHitsRight = contig.findall('vectorhitright')
+            for match in flanks.findall('match'):
+                recordedIDs.append(match.attrib['leftid'])
+                recordedIDs.append(match.attrib['rightid'])
+                for v in vectorHitsLeft:
+                    if v.attrib['id'] == match.attrib['leftid']:
+                        matchLeft = int(v.find('send').text)
+                        break
+                for v in vectorHitsRight:
+                    if v.attrib['id'] == match.attrib['rightid']:
+                        insertSites[(seqid, stitle)][specimen][contigName]['match'].append((v.attrib['seqid'], (matchLeft, int(v.find('sstart').text))))
+                        break
+                        
+            insertSites[(seqid, stitle)][specimen][contigName]['inversion'] = []
+            for match in flanks.findall('inversion'):
+                recordedIDs.append(match.attrib['leftid'])
+                recordedIDs.append(match.attrib['rightid'])
+                for v in vectorHitsLeft:
+                    if v.attrib['id'] == match.attrib['leftid']:
+                        matchLeft = int(v.find('send').text)
+                        break
+                for v in vectorHitsRight:
+                    if v.attrib['id'] == match.attrib['rightid']:
+                        insertSites[(seqid, stitle)][specimen][contigName]['inversion'].append((v.attrib['seqid'], (matchLeft, int(v.find('sstart').text))))
+                        break
+        
+            insertSites[(seqid, stitle)][specimen][contigName]['left'] = []
+            for v in vectorHitsLeft:
+                if v.attrib['id'] not in recordedIDs:
+#                if 'repeat_region' not in [f.attrib['type'] for f in v.findall('feature')]:
+                    aedes_qstart = int(v.find('qstart').text)
+                    aedes_qend = int(v.find('qend').text)
+                    virus_qstart = qpos[0][0]
+                    virus_qend = qpos[-1][1]
+                    if (-ALLOWED_OVERLAP <= virus_qstart - aedes_qend <= MIN_FLANKING_DISTANCE) or (-ALLOWED_OVERLAP <= aedes_qstart - virus_qend <= MIN_FLANKING_DISTANCE): # or (len(aedes_qseq) >= MIN_FLANKING_HIT_LENGTH):
+                        insertSites[(seqid, stitle)][specimen][contigName]['left'].append((v.attrib['seqid'], int(v.find('send').text)))
+                
+            insertSites[(seqid, stitle)][specimen][contigName]['right'] = []
+            for v in vectorHitsRight:
+                if v.attrib['id'] not in recordedIDs:
+#                if 'repeat_region' not in [f.attrib['type'] for f in v.findall('feature')]:
+                    aedes_qstart = int(v.find('qstart').text)
+                    aedes_qend = int(v.find('qend').text)
+                    virus_qstart = qpos[0][0]
+                    virus_qend = qpos[-1][1]
+                    if (-ALLOWED_OVERLAP <= virus_qstart - aedes_qend <= MIN_FLANKING_DISTANCE) or (-ALLOWED_OVERLAP <= aedes_qstart - virus_qend <= MIN_FLANKING_DISTANCE): # or (len(aedes_qseq) >= MIN_FLANKING_HIT_LENGTH):
+                        insertSites[(seqid, stitle)][specimen][contigName]['right'].append((v.attrib['seqid'], int(v.find('sstart').text)))
+        
+            numVectorHits = len(vectorHitsLeft + vectorHitsRight)
+        
 #            numOverlapVectorHits = len(contig.findall('vectorhitoverlap'))
             features = []
             featureSummary = contig.find('featuresummary')
@@ -1520,12 +1898,11 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
                 for f in featureSummary:
                     if f.tag != 'None':
                         features.append((f.tag, int(f.text) / numVectorHits))
-                        
                     
             if specimen not in viralHits:
                 viralHits[specimen] = []
             viralHits[specimen].append((seqid, stitle, hit, features))
-            
+        
             flanks = contig.find('flanks')
             matches = flanks.findall('match')
 #                numVectorHits = len(contig.findall('vectorhitleft') + contig.findall('vectorhitright'))
@@ -1537,26 +1914,28 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
                 if specimen not in viralHits1:
                     viralHits1[specimen] = []
                 viralHits1[specimen].append((seqid, stitle, hit, features))
-                
+            
 #            if numOverlapVectorHits > 0:
             if contig.attrib['inreference'] == 'True':
                 if specimen not in viralHits0:
                     viralHits0[specimen] = []
                 viralHits0[specimen].append((seqid, stitle, hit, features))
-                
+            
             if (seqid, stitle, hit) not in allHits:
                 allHits.append((seqid, stitle, hit, features))
+            
+#            contig.clear()
         virus_fasta.close()
         virus_fasta_percontig.close()
-
-    VIRUSES_DIR = RESULTS_DIR + 'viruses/'
+        
     if not Path(VIRUSES_DIR).exists():
         os.system('mkdir ' + VIRUSES_DIR)
-    SEQUENCES_DIR = VIRUSES_DIR + 'sequences/'
     if not Path(SEQUENCES_DIR).exists():
         os.system('mkdir ' + SEQUENCES_DIR)
         
     fams = readFamFile()
+    positions = {}
+    viralSeqsBySpecimen = {}
     for (seqid, stitle) in viralSeqs:
         if seqid not in fams:
             fam = getFamily(seqid)
@@ -1577,18 +1956,18 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
                 refSeqs[(seqid, stitle)][specimen][contigName] = newDictRef
         
         refIndices = {}    # specimen seq at each reference index
-        positions = {}     # virus positions for fasta headers
+        positions[(seqid, stitle)] = {}     # virus positions for fasta headers
         for specimen in viralSeqs[(seqid, stitle)]:
             refIndices[specimen] = {}
-            positions[specimen] = {}
+            positions[(seqid, stitle)][specimen] = {}
             for contigName in viralSeqs[(seqid, stitle)][specimen]:
                 refIndices[specimen][contigName] = {}
-                positions[specimen][contigName] = []
+                positions[(seqid, stitle)][specimen][contigName] = []
                 for (start, end) in viralSeqs[(seqid, stitle)][specimen][contigName]:
                     refIndex = start - 2  # -1 for 0-indexing, -1 for initial increment
                     seq = viralSeqs[(seqid, stitle)][specimen][contigName][(start, end)]
                     refSeq = refSeqs[(seqid, stitle)][specimen][contigName][(start, end)]
-                    positions[specimen][contigName].append((start, end))
+                    positions[(seqid, stitle)][specimen][contigName].append((start, end))
                     for index in range(len(seq)):
                         if refSeq[index] != '-':
                             refIndex += 1
@@ -1597,47 +1976,28 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
                             refIndices[specimen][contigName][refIndex] += seq[index]
                 viralSeqs[(seqid, stitle)][specimen][contigName] = ''
                     
-        referenceFilename = '/home/havill/data/aegypti/genomes/' + seqid + '.fasta'
-        try:
-            refFile = open(referenceFilename, 'r')
-        except:
-            prefix1 = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
-            prefix2 = '?db=nuccore&id='
-            suffix = '&rettype=fasta&retmode=text'
-            url = prefix1 + prefix2 + seqid + suffix
-            try:
-                fastaFile = web.urlopen(url)
-            except:
-                writelog('Error getting reference sequence ' + seqid + ' from NCBI.  Aligned FASTA file not created.')
-                continue
-            fastaText = fastaFile.read().decode('utf-8')
-            fastaFile.close()
-            refFile = open(referenceFilename, 'w')
-            refFile.write(fastaText)
-            refFile.close()
-            refFile = open(referenceFilename, 'r')
-            
-        refRecord = SeqIO.read(refFile, 'fasta')
-        refFile.close()
+        referenceFilename = FASTA_DIR + seqid + '.fasta'
+        refRecord = getSeqRecord(referenceFilename)
         referenceSeq = str(refRecord.seq)
         virusLength = len(referenceSeq)
         referenceID = refRecord.id
         assert referenceID == seqid
         viralSeqs[(seqid, stitle)][referenceID] = ''
         refIndicesBySpecimen = {}
-        viralSeqsBySpecimen = {}
+        viralSeqsBySpecimen[(seqid, stitle)] = {}
         for specimen in refIndices:
             refIndicesBySpecimen[specimen] = {}
-            viralSeqsBySpecimen[specimen] = ''
+            viralSeqsBySpecimen[(seqid, stitle)][specimen] = ''
             for contigName in refIndices[specimen]:
                 for refIndex in refIndices[specimen][contigName]:
-                    refIndicesBySpecimen[specimen][refIndex] = refIndices[specimen][contigName][refIndex]
+                    if (refIndex not in refIndicesBySpecimen[specimen]) or (len(refIndices[specimen][contigName][refIndex]) > len(refIndicesBySpecimen[specimen][refIndex])):
+                        refIndicesBySpecimen[specimen][refIndex] = refIndices[specimen][contigName][refIndex]
         
         for refIndex in range(virusLength):
             maxLength = max([len(refIndicesBySpecimen[specimen].get(refIndex, '-')) for specimen in refIndices])
             viralSeqs[(seqid, stitle)][referenceID] += '{0:-<{1}}'.format(referenceSeq[refIndex], maxLength)
             for specimen in refIndices:
-                viralSeqsBySpecimen[specimen] += '{0:-<{1}}'.format(refIndicesBySpecimen[specimen].get(refIndex, ''), maxLength)
+                viralSeqsBySpecimen[(seqid, stitle)][specimen] += '{0:-<{1}}'.format(refIndicesBySpecimen[specimen].get(refIndex, ''), maxLength)
                 for contigName in refIndices[specimen]:
                     viralSeqs[(seqid, stitle)][specimen][contigName] += '{0:-<{1}}'.format(refIndices[specimen][contigName].get(refIndex, ''), maxLength)
 
@@ -1645,62 +2005,73 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
         if not Path(FAMILY_DIR).exists():
             os.system('mkdir ' + FAMILY_DIR)
         
-        seqOut = open(str(Path(FAMILY_DIR) / ('sequences_' + seqid + '_per_specimen_aligned.fasta')), 'w')
-        seqOutPerContig = open(str(Path(FAMILY_DIR) / ('sequences_' + seqid + '_per_contig_aligned.fasta')), 'w')
+        seqOutFileName = str(Path(FAMILY_DIR) / ('sequences_' + seqid + '_per_specimen_aligned.fasta'))
+        seqOutPerContigFileName = str(Path(FAMILY_DIR) / ('sequences_' + seqid + '_per_contig_aligned.fasta'))
+        seqOut = open(seqOutFileName, 'w')
+        seqOutPerContig = open(seqOutPerContigFileName, 'w')
         sortedSpecimens = list(viralSeqs[(seqid, stitle)].keys())
         sortedSpecimens.remove(referenceID)
         sortedSpecimens.sort()
+        
+        theLength = len(viralSeqs[(seqid, stitle)][referenceID])
+        
         seqOut.write('>' + referenceID + ' ' + stitle + '\n')
         seqOut.write(viralSeqs[(seqid, stitle)][referenceID] + '\n')
         seqOutPerContig.write('>' + referenceID + ' ' + stitle + '\n')
         seqOutPerContig.write(viralSeqs[(seqid, stitle)][referenceID] + '\n')
         for specimen in sortedSpecimens:
-            region, num = getSpecimenLabel(specimen)
-            region = region.replace(' ', '_')
+            region, num = specimen2Label[specimen]
+#            region = region.replace(' ', '_')
             posSpecimen = []
-            for contigName in positions[specimen]:
-                posSpecimen.extend(positions[specimen][contigName])
+            for contigName in positions[(seqid, stitle)][specimen]:
+                posSpecimen.extend(positions[(seqid, stitle)][specimen][contigName])
             posSpecimen.sort()
             posString = ''
             for start, end in posSpecimen:
                 posString += str(start) + '-' + str(end) + ','
                 
-            # compute weighted pident and add to headers
-                
             seqOut.write('>' + region + '_' + str(num) + '_' + posString[:-1] + '\n')
-            seqOut.write(viralSeqsBySpecimen[specimen] + '\n')
+            seqOut.write(viralSeqsBySpecimen[(seqid, stitle)][specimen] + '\n')
             contigCount = 1
             for contigName in viralSeqs[(seqid, stitle)][specimen]:
-                positions[specimen][contigName].sort()
+            
+                if len(viralSeqs[(seqid, stitle)][specimen][contigName]) != theLength:
+                    writelog('Sequence length error: ' + seqid + ', ' + specimen + ', ' + contigName + ' (length = ' + str(len(viralSeqs[(seqid, stitle)][specimen][contigName])) + ', should be ' + str(theLength) + ') - FIXED', True)
+                    viralSeqs[(seqid, stitle)][specimen][contigName] = viralSeqs[(seqid, stitle)][specimen][contigName][:theLength]
+                    
+                positions[(seqid, stitle)][specimen][contigName].sort()
                 posString = ''
-                for start, end in positions[specimen][contigName]:
+                for start, end in positions[(seqid, stitle)][specimen][contigName]:
                     posString += str(start) + '-' + str(end) + ','
-                seqOutPerContig.write('>' + region + '_' + str(num) + '__contig' + str(contigCount) + '_' + posString[:-1] + '\n')
+                    
+                # compute weighted pident and add to headers
+                top = bottom = 0
+                for start, end in pIdents[(seqid, stitle)][specimen][contigName]:
+                    top += pIdents[(seqid, stitle)][specimen][contigName][(start, end)] * (abs(end - start) + 1)
+                    bottom += abs(end - start) + 1
+                pident = top / bottom
+                
+                #seqOutPerContig.write('>' + region + '_' + str(num) + '__contig' + str(contigCount) + '_' + posString[:-1] + '_pident_' + '{:5.3f}'.format(pident) + '\n')
+                seqOutPerContig.write('>' + specimen + '_|_' + contigName + '_|_' + posString[:-1] + '_pident_' + '{:5.3f}'.format(pident) + '\n')
                 seqOutPerContig.write(viralSeqs[(seqid, stitle)][specimen][contigName] + '\n')
                 contigCount += 1
         seqOut.close()
         seqOutPerContig.close()
-#
-    out = open(str(Path(RESULTS_DIR) / ('results_' + virusName + '.tsv')), 'w')
+        
+        # Plot insertion positions.
+        
+#        if seqid == 'NC_001564.2':
+        clusteredFileName = findClusters(seqOutPerContigFileName)
+#            if clusteredFileName is not None:
+#                drawInsertSites(clusteredFileName, insertSites, seqid, stitle, specimen2Label, FAMILY_DIR)
     
     allViruses = []
     for entry in allHits:
         allViruses.append((entry[1], entry[0]))  # stitle, seqid
     allViruses = list(set(allViruses))
     allViruses.sort()
-#    allHits.sort()                        # write (start, end) header
-#     hitCounts1 = {}
-#     hitCounts2 = {}
-    out.write('\t')
-    for stitle, seqid in allViruses:
-        out.write(seqid + '\t')
-    out.write('\n')
-    out.write('\t')
-    for stitle, seqid in allViruses:
-        out.write(stitle + '\t')
-    out.write('\n')
     
-    fams = readFamFile()
+#    fams = readFamFile()
     allFamilies = []
     for stitle, seqid in allViruses:
         if seqid not in fams:
@@ -1708,135 +2079,105 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
             fams[seqid] = fam
             addFamily(seqid, fam)
         allFamilies.append(fams[seqid])
-    out.write('\t')
-    for fam in allFamilies:
-        out.write(fam + '\t')
-    out.write('\n')
-    
-#     for hit in allHits:
-#         out.write(str(hit) + '\t')
-#         hitCounts1[hit] = 0
-#         hitCounts2[hit] = 0
-#     out.write('\n')
-#     out.write('\t')                       # write length header
-#     for hit in allHits:
-#         length = sum([abs(hit[i+1] - hit[i]) + 1 for i in range(0, len(hit), 2)])
-#         out.write(str(length) + '\t')
-#     out.write('\n')
-    specimens = list(viralHits.keys())
-    specimenLabels = {}
-    for specimen in specimens:
-        specimenLabels[getSpecimenLabel(specimen)] = specimen
-    specimenLabelsList = list(specimenLabels.keys())
-    specimenLabelsList.sort()
-    for region, num in specimenLabelsList:
-        specimen = specimenLabels[(region, num)]
-        out.write(region + ' ' + str(num) + '\t')
-        for stitle, seqid in allViruses:
-            length = 0
-#            rangeString = ''
-            rangeList = []
-            for hit in viralHits[specimen]:  # hit = (seqid, stitle, hitDict) in one contig
-                if hit[0] == seqid:
-                    if omitInReference and (specimen in viralHits0) and (hit in viralHits0[specimen]):  # overlapping vector hit
-                        continue
-                    hitDict = hit[2]
-                    qpos = list(hitDict.keys())
-                    qpos.sort()                  # within hit, sort by qstart
-                    s = []
-                    for p in qpos:
-                        length += abs(hitDict[p][1] - hitDict[p][0]) + 1
-#                        rangeString += str(hitDict[p][0]) + '-' + str(hitDict[p][1]) + ', '
-                        s.extend([hitDict[p][0], hitDict[p][1]])
-                    if s[0] > s[-1]:
-                        s = s[::-1]
-                    if (specimen in viralHits0) and (hit in viralHits0[specimen]):  # overlapping vector hit
-                        s.append(3)
-                    elif (specimen in viralHits2) and (hit in viralHits2[specimen]):
-                        s.append(2)
-                    elif (specimen in viralHits1) and (hit in viralHits1[specimen]):
-                        s.append(1)
-                    else:
-                        s.append(0)
-                        
-                    if len(hit) > 3:
-                        features = hit[3]
-                    else:
-                        features = []
-                    
-                    featureString = ''
-                    for f in features:
-                        featureString += '{0}: {1:4.2f}, '.format(f[0], f[1])
-                    if len(featureString) > 0:
-                        featureString = featureString[:-2]
-                    s.append(featureString)
 
-                    rangeList.append(s)  # s = (sstart, send, sstart, send, ..., 0/1/2/3, features)
-                        
-                    
-            rangeList.sort()    # among all hits, sort by first sstart
-            rangeString = ''
-            for s in rangeList:
-                for i in range(0, len(s) - 2, 2):
-                    rangeString += str(s[i]) + '-' + str(s[i+1]) + ', '
-                rangeString = rangeString[:-2] + ('*' * s[-2]) + ' (' + s[-1] + ') | '
-            if length > 0:
-                out.write(rangeString[:-1] + '| ' + str(length))
-            out.write('\t')
-                    
-            # if (specimen in viralHits2) and (hit in viralHits2[specimen]):
-#                 out.write('2\t')
-#                 hitCounts2[hit] += 1
-#             elif (specimen in viralHits1) and (hit in viralHits1[specimen]):
-#                 out.write('1\t')
-#                 hitCounts1[hit] += 1
-#             else:
-#                 out.write('0\t')
-        out.write(specimen + '\n')
-#     out.write('Total 2\t')
-#     for hit in allHits:
-#         out.write(str(hitCounts2[hit]) + '\t')
-#     out.write('\n')
-#     out.write('Total 1\t')
-#     for hit in allHits:
-#         out.write(str(hitCounts1[hit]) + '\t')
-#     out.write('\n')
-#     out.write('Total all\t')
-#     for hit in allHits:
-#         out.write(str(hitCounts1[hit] + hitCounts2[hit]) + '\t')
-#     out.write('\n')
-    out.close()   
+    # Write family sequence files
+        
+    for family in set(allFamilies):
+        FAMILY_DIR = SEQUENCES_DIR + family
+        if not Path(FAMILY_DIR).exists():
+            os.system('mkdir ' + FAMILY_DIR)
+            
+        # get seqids in family
+        famACCs = []
+        for stitle, seqid in allViruses:
+            if seqid not in fams:
+                fam = getFamily(seqid)
+                fams[seqid] = fam
+                addFamily(seqid, fam)
+            if fams[seqid] == family:
+                famACCs.append((seqid, stitle))
+                
+        # get seqid for most hits in family to use as reference/representative
+        repACC = famACCs[0]
+        for seqid, stitle in famACCs[1:]:
+            if len(viralSeqs[(seqid, stitle)]) > len(viralSeqs[repACC]):
+                repACC = (seqid, stitle)
+            
+        # find start positions for leftmost CDS
+        startPositions = {}
+        for seqid, stitle in famACCs:
+            if not Path(GB_DIR + seqid + '.gb').exists():
+                if not getGenBank(seqid):
+                    continue
+            virusRecord = SeqIO.read('/home/havill/data/aegypti/gb/' + seqid + '.gb', 'gb')  # SeqRecord
+            minCDSPos = math.inf
+            for feature in virusRecord.features:
+                if feature.type == 'CDS':
+                    minCDSPos = min(minCDSPos, feature.location.start)
+            startPositions[(seqid, stitle)] = minCDSPos
+    
+#         famHits = {}
+#         for acc in famACCs:
+#             for specimen in allVirusHits[acc]:
+#                 if specimen not in famHits:
+#                     famHits[specimen] = Hits()
+#                 allVirusHits[acc][specimen].adjust(startPositions[repACC] - startPositions[acc])
+#                 famHits[specimen].addHits(allVirusHits[acc][specimen].getPrimaryHitsOnly())  # only primary hits so one hit per contig
+                
+        seqOut = open(str(Path(FAMILY_DIR) / ('sequences_' + family + '_per_specimen_aligned.fasta')), 'w')
+        seqOutPerContig = open(str(Path(FAMILY_DIR) / ('sequences_' + family + '_per_contig_aligned.fasta')), 'w')
+        
+        seqOut.write('>' + repACC[0] + ' ' + repACC[1] + '\n')
+        seqOut.write(viralSeqs[repACC][repACC[0]] + '\n')
+        seqOutPerContig.write('>' + repACC[0] + ' ' + repACC[1] + '\n')
+        seqOutPerContig.write(viralSeqs[repACC][repACC[0]] + '\n')
+        repLength = len(viralSeqs[repACC][repACC[0]])
+        
+        for seqid, stitle in famACCs:
+            adjust = startPositions[repACC] - startPositions[(seqid, stitle)]
+            addGaps = abs(adjust)
+            sortedSpecimens = list(viralSeqs[(seqid, stitle)].keys())
+            try:
+                sortedSpecimens.remove(seqid)
+            except ValueError:
+                pass
+            sortedSpecimens.sort()
+            for specimen in sortedSpecimens:
+                region, num = getSpecimenLabel(specimen)
+                region = region.replace(' ', '_')
+                posSpecimen = []
+                for contigName in positions[(seqid, stitle)][specimen]:
+                    posSpecimen.extend(positions[(seqid, stitle)][specimen][contigName])
+                posSpecimen.sort()
+                posString = ''
+                for start, end in posSpecimen:
+                    posString += str(start) + '-' + str(end) + ','
+                
+                # compute weighted pident and add to headers
+                
+                seqOut.write('>' + region + '_' + str(num) + '_' + seqid + '_' + posString[:-1] + '\n')
+                if adjust > 0:
+                    seqOut.write(('{:-<' + str(repLength) + '}').format('-' * addGaps + viralSeqsBySpecimen[(seqid, stitle)][specimen][:repLength-addGaps]) + '\n')
+                else:
+                    seqOut.write(('{:-<' + str(repLength) + '}').format(viralSeqsBySpecimen[(seqid, stitle)][specimen][addGaps:repLength]) + '\n')
+                contigCount = 1
+                for contigName in viralSeqs[(seqid, stitle)][specimen]:
+                    positions[(seqid, stitle)][specimen][contigName].sort()
+                    posString = ''
+                    for start, end in positions[(seqid, stitle)][specimen][contigName]:
+                        posString += str(start) + '-' + str(end) + ','
+                    seqOutPerContig.write('>' + region + '_' + str(num) + '__contig' + str(contigCount) + '_' + seqid + '_' + posString[:-1] + '\n')
+                    if adjust > 0:
+                        seqOutPerContig.write(('{:-<' + str(repLength) + '}').format('-' * addGaps + viralSeqs[(seqid, stitle)][specimen][contigName][:repLength-addGaps]) + '\n')
+                    else:
+                        seqOutPerContig.write(('{:-<' + str(repLength) + '}').format(viralSeqs[(seqid, stitle)][specimen][contigName][addGaps:repLength]) + '\n')
+                    contigCount += 1
+        seqOut.close()
+        seqOutPerContig.close()
+
+    writeSummaryTable(str(Path(RESULTS_DIR) / ('results_' + virusName + '.tsv')), viralHits, viralHits0, viralHits1, viralHits2, allFamilies, allViruses, omitInReference)
 
 ###############################################################################
-               
-def getSpecimenLabel(specimen):
-    populations = {'Angola': ['Angola'], 
-                   'Argentina': ['Argentina', 'US_U'], 
-                   'Australia': ['Australia'], 
-                   'Brazil': ['Brazil'], 
-                   'French Polynesia': ['FrenchPolynesia'],
-                   'Gabon': ['Gabon'], 
-                   'Mexico': ['Mexico'], 
-                   'Philippines': ['Philippines'], 
-                   'South Africa': ['South_Africa'], 
-                   'Thailand': ['Thailand'], 
-                    'USA': ['USA', 'AZ'], 
-                   'Vietnam': ['Vietnam']}
-               
-    region = 'Unknown'
-    for popName in populations:
-        for pattern in populations[popName]:
-            if pattern in specimen:
-                region = popName
-                break
-                
-    p = re.compile(r'[0-9]+')
-    try:
-        num = int(p.findall(specimen)[0])
-    except:
-        num = 0
-    
-    return region, num
                
 AaegL5_hits = {'NC_001564.2': [9330, 8303],   # Cell fusing agent virus
                'NC_034017.1': [1677, 839, 2269, 3801, 5188, 6416, 7537, 8296, 10083, 8327],  # Xishuangbanna aedes flavivirus
@@ -1949,13 +2290,13 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL
         if len(virusRecord2.description) > 80:
             virusName += '...'
         virusName += ')'
-        writelog('Creating diagram' + 's' * separatePops + ' for family ' + family + ' (using representative ' + virusRecord2.id + ')...', True)
+        writelog('  Creating diagram' + 's' * separatePops + ' for family ' + family + ' (using representative ' + virusRecord2.id + ')...', True)
     else:
         virusName = virusRecord2.id + ': ' + virusRecord2.description[:80]
         if len(virusRecord2.description) > 80:
             virusName += '...'
         virusName += ' (' + family + ')'
-        writelog('Creating diagram' + 's' * separatePops + ' for ' + virusName + '...', True)
+        writelog('  Creating diagram' + 's' * separatePops + ' for ' + virusName + '...', True)
                 
     features = {}
     for specimen in allSpecimens:
@@ -2116,10 +2457,15 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL
             figName = family + '_' + pop + '.pdf'
         else:
             figName = acc + '_' + pop + '.pdf'
-        fig.savefig(Path(FAMILY_DIR) / figName)
+        
+        pp = PdfPages(str(Path(FAMILY_DIR) / figName))
+        pp.savefig(fig)
+        pp.close()
+#        fig.savefig(Path(FAMILY_DIR) / figName)
         pyplot.close(fig)
 
 def getHitsForDiagram(omitInReference = True):
+    writelog('  Reading hits for diagrams...', True)
     dir = Path(RESULTS_DIR + 'specimens/')
     subdirs = [d for d in dir.iterdir()]
     files = [d / ('xml/' + d.name + '_all_hits_features.xml') for d in subdirs ]
@@ -2129,7 +2475,7 @@ def getHitsForDiagram(omitInReference = True):
     allSpecimens = []
     for file in files:
         specimen = file.name.rstrip('_all_hits_features.xml')
-        writelog('Getting hits for ' + specimen + '...', True)
+#        writelog('Getting hits for ' + specimen + '...', True)
         allSpecimens.append(specimen)
         tree = ET.parse(str(file))
         root = tree.getroot()
@@ -2204,6 +2550,7 @@ def drawFamily(families, famACCs, separatePops, showAaegL5_hits, showPlot, small
         famACCs = None
     
 def drawAll(separatePops, omitInReference):
+    writelog('Creating diagrams...', True)
     allVirusHits, allSpecimens = getHitsForDiagram(omitInReference)
     
     fams = readFamFile()
@@ -2241,14 +2588,14 @@ def doItAllViruses(dirName, filenameBAM, virusName, virusDB, alsoFindFeatures = 
 
         success = assembleReads(dirName, virusName)  #1 = assemble
         if success:
-            blastScaffolds(dirName, virusName, virusDB, EVALUE_V, False)  #2 = blast scaffolds
+            blastScaffolds(dirName, virusName, virusDB, False)  #2 = blast scaffolds
             
 #            hitsDirName = str(Path(dirName).parent.parent / ('results/HITS_' + virusName))
 #            hitsCombinedDirName = str(Path(dirName).parent.parent / ('results/HITS_' + virusName + '_combined'))
         
-            xmlFilename = getHits(dirName, virusName, 100, EVALUE_A)  #3 = get hits
+            xmlFilename = getHits(dirName, virusName)  #3 = get hits
             if xmlFilename is not None:
-                drawXML(xmlFilename, str(Path(xmlFilename).parent / 'png'), FLANK_DRAW_LIMIT, False)
+                drawXML(xmlFilename, str(Path(xmlFilename).parent / 'diagrams'), False)
 #                 if not Path(hitsDirName).exists():
 #                     os.mkdir(hitsDirName)
                 
@@ -2300,12 +2647,13 @@ def doAll():
 #     dirList = dirListNew
     
     count = 0
+    dirList.sort()
     for dir in dirList:
         for file in dir.iterdir():
             if not file.is_dir() and (file.name[-26:] == '.sorted.deduped.merged.bam'):
                 count += 1
-                writelog(str(count) + '/' + str(len(dirList)) + ': ' + dir.name, True)
-                doItAllViruses(str(dir.resolve()), file.name, 'all', 'virusdb5', True)  # **virusdb5, features**
+                writelog('\n' + str(count) + '/' + str(len(dirList)) + ': ' + dir.name, True)
+                doItAllViruses(str(dir.resolve()), file.name, 'all', 'virusdb', True)
                 break
                     
 def doAllParallel2():
@@ -2337,7 +2685,7 @@ def doAllParallel2():
     os.system('cp ' + ROOT_DIR + '/*/spades_all/*all_hits.xml ' + str(Path(ROOT).parent) + '/results/HITS_all')
     consolidateAll(str(Path(ROOT_DIR).parent) + '/results/HITS_all', 'all')
 
-logFile = open(LOGFILE_PATH, 'a')
+logFile = None
 
 def writelog(message, alsoPrint = False):
     logFile.write(message + '\n')
@@ -2345,6 +2693,20 @@ def writelog(message, alsoPrint = False):
         print(message)
 
 def main():
+    global logFile
+    
+    if Path(RESULTS_DIR).exists():
+        answer = ' '
+        while answer not in 'yYnN':
+            answer = input('Results directory exists.  Overwrite (y/n)? ')
+        if answer[0] not in 'yY':
+            writelog('OK, quitting.', True)
+            return 1
+    else:
+        os.system('mkdir ' + RESULTS_DIR)
+        
+    logFile = open(LOGFILE_PATH, 'a')
+        
     writelog('\n************************************************')
     writelog('Starting pipeline at ' + time.strftime('%c'))
     
@@ -2353,12 +2715,13 @@ def main():
     if copyResults():
         consolidateAll('all', True, True)
         drawAll(False, False)
-        drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)
+#        drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)
     
 #main()
 #doAll()
+xmlFilename = '/Volumes/Data/aegypti/analyzed/Bangkok_Thailand_01.LIN210A1679/spades_all/Bangkok_Thailand_01.LIN210A1679_all_hits.xml'
+drawXML(xmlFilename, str(Path(xmlFilename).parent / 'diagrams'), False)
 #consolidateAll('all', True, True)
-#xmlFilename = getHits(str(Path(ROOT_DIR + 'Cuanda_Angola_02.LIN210A1720')), 'all', 100, EVALUE_A)  #3 = get hits
-consolidateAll('all', True, True)
+#xmlFilename = getHits(str(Path(ROOT_DIR + 'Cuanda_Angola_16.LIN210A1734')), 'all', 100, EVALUE_A)  #3 = get hits
 #drawAll(False, False)
 #drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)

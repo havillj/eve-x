@@ -73,12 +73,17 @@ def drawFromFile(fileName, virusName):
 
 ###############################################################################
 
-def drawEVEs(EVEs, openEnds, virusName, title):
+def drawEVEs(EVEs, virusName, title, openEnds = None):
 
     width = 10
     height = 3
     thickness = 10
     fontsize = 8
+    
+    if openEnds is None:
+        openEnds = []
+        for i in range(len(EVEs)):
+            openEnds.append(tuple([False] * (len(EVEs[i]) - 1)))
     
     virusRecord = MyCustomTranslator().translate_record('/home/havill/data/aegypti/gb/' + virusName + '.gb')
     for f in virusRecord.features:
@@ -86,10 +91,10 @@ def drawEVEs(EVEs, openEnds, virusName, title):
         f.linewidth = 0.5
         f.fontdict = {'size': fontsize}
     
-    fig, ax = pyplot.subplots(len(EVEs) + 1, 1, sharex = False, sharey = False, figsize = (width, height), gridspec_kw = {'height_ratios': [5] + [1] * len(EVEs)})
+    fig, ax = pyplot.subplots(len(EVEs) + 1, 1, sharex = False, sharey = False, figsize = (width, height), gridspec_kw = {'height_ratios': [6] + [1] * len(EVEs)})
     virusRecord.plot(ax = ax[0], figure_width=width, with_ruler = True, max_line_length = 80, max_label_length = 80)
     x0, y0, w, h = ax[0].get_position().bounds
-    ax[0].set_position([x0, y0+h*0.1, w, h])
+    ax[0].set_position([x0, y0+h*0.2, w, h])
     ax[0].tick_params(labelsize = fontsize)
 #    fig.suptitle(title, fontsize = fontsize, fontweight = 'bold', y = 0.9)
 #    fig.subplots_adjust(top = 0.99, bottom = 0.01, left = 0.18, right = 0.95)
@@ -99,7 +104,7 @@ def drawEVEs(EVEs, openEnds, virusName, title):
         eveName = eve[0]
         features = []
         for index in range(1, len(eve), 2):
-            features.append(GraphicFeature(start=eve[index], end=eve[index+1], strand=1, color='blue', label = None, thickness = 10, linewidth = 0, open_left = open[index - 1], open_right = open[index]))
+            features.append(GraphicFeature(start=eve[index], end=eve[index+1], strand=1, color='#5555FF', label = None, thickness = 10, linewidth = 0, open_left = open[index - 1], open_right = open[index]))
            
         record = GraphicRecord(features = features, sequence_length = virusRecord.sequence_length, feature_level_height = 0)
         record.plot(ax = ax[eveNum], figure_width=width, with_ruler = False)
@@ -108,13 +113,16 @@ def drawEVEs(EVEs, openEnds, virusName, title):
         
     fig.savefig(title + '.pdf')
     
-# CFAV_EVEs = [('CFAV EVE 1', 1816, 4663, 739, 1094, 4953, 6564),
-#              ('CFAV EVE 2', 1925, 2498, 4559, 5270),
-#              ('CFAV EVE 3', 4254, 3914, 6369, 6313, 7311, 7486, 8549, 8737),
-#              ('CFAV EVE 4', 3585, 3915),
-#              ('CFAV EVE 5', 323, 3780)]
-#              
-# drawEVEs(CFAV_EVEs, 'NC_001564.2', 'CFAV EVEs')
+CFAV_EVEs = [('CFAV EVE 1', 1816, 4663, 739, 1094, 4953, 6564),
+             ('CFAV EVE 2', 1925, 2498, 4559, 5270),
+             ('CFAV EVE 3', 4254, 3914, 6369, 6313, 7311, 7486, 8549, 8737),
+             ('CFAV EVE 4', 3585, 3915),
+             ('CFAV EVE 5', 323, 3780),
+             ('CFAV EVE 6', 9698, 9954)]
+             
+openEnds = [(True, True, True, True, True, True), (True, True, True, True), (False, False, False, False, False, False, False, False), (True, True), (True, True), (True, True)]
+             
+drawEVEs(CFAV_EVEs, 'NC_001564.2', 'CFAV EVEs', openEnds)
 
 # XIN_EVEs = [('XIN EVE 1', 10, 1401),
 #              ('XIN EVE 2', 3775, 5551),
@@ -134,153 +142,153 @@ def drawEVEs(EVEs, openEnds, virusName, title):
 
 # code from https://matplotlib.org/stable/gallery/images_contours_and_fields/image_annotated_heatmap.html
     
-def heatmap(data, row_labels, col_labels, ax=None, cbar_kw={}, cbarlabel="", **kwargs):
-    """
-    Create a heatmap from a numpy array and two lists of labels.
-
-    Parameters
-    ----------
-    data
-        A 2D numpy array of shape (N, M).
-    row_labels
-        A list or array of length N with the labels for the rows.
-    col_labels
-        A list or array of length M with the labels for the columns.
-    ax
-        A `matplotlib.axes.Axes` instance to which the heatmap is plotted.  If
-        not provided, use current axes or create a new one.  Optional.
-    cbar_kw
-        A dictionary with arguments to `matplotlib.Figure.colorbar`.  Optional.
-    cbarlabel
-        The label for the colorbar.  Optional.
-    **kwargs
-        All other arguments are forwarded to `imshow`.
-    """
-
-    if not ax:
-        ax = pyplot.gca()
-
-    # Plot the heatmap
-    im = ax.imshow(data, **kwargs)
-
-    # Create colorbar
-    cbar = ax.figure.colorbar(im, ax=ax, **cbar_kw)
-    cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom")
-
-    # We want to show all ticks...
-    ax.set_xticks(np.arange(data.shape[1]))
-    ax.set_yticks(np.arange(data.shape[0]))
-    # ... and label them with the respective list entries.
-    ax.set_xticklabels(col_labels, fontfamily='serif', fontweight='bold')
-    ax.set_yticklabels(row_labels, fontfamily='serif', fontweight='bold')
-
-    # Let the horizontal axes labeling appear on top.
-    ax.tick_params(top=False, bottom=False, left=False,
-                   labeltop=True, labelbottom=False)
-
-    # Rotate the tick labels and set their alignment.
-    pyplot.setp(ax.get_xticklabels(), rotation=0, ha="center",
-             rotation_mode="anchor")
-
-    # Turn spines off and create white grid.
-    for edge, spine in ax.spines.items():
-        spine.set_visible(False)
-
-    ax.set_xticks(np.arange(data.shape[1]+1)-.5, minor=True)
-    ax.set_yticks(np.arange(data.shape[0]+1)-.5, minor=True)
-    ax.grid(which="minor", color="w", linestyle='-', linewidth=3)
-    ax.tick_params(which="minor", bottom=False, left=False)
-
-    return im, cbar
-
-def annotate_heatmap(im, data=None, valfmt="{x:.2f}", textcolors=("black", "white"), threshold=None, **textkw):
-    """
-    A function to annotate a heatmap.
-
-    Parameters
-    ----------
-    im
-        The AxesImage to be labeled.
-    data
-        Data used to annotate.  If None, the image's data is used.  Optional.
-    valfmt
-        The format of the annotations inside the heatmap.  This should either
-        use the string format method, e.g. "$ {x:.2f}", or be a
-        `matplotlib.ticker.Formatter`.  Optional.
-    textcolors
-        A pair of colors.  The first is used for values below a threshold,
-        the second for those above.  Optional.
-    threshold
-        Value in data units according to which the colors from textcolors are
-        applied.  If None (the default) uses the middle of the colormap as
-        separation.  Optional.
-    **kwargs
-        All other arguments are forwarded to each call to `text` used to create
-        the text labels.
-    """
-
-    if not isinstance(data, (list, np.ndarray)):
-        data = im.get_array()
-
-    # Normalize the threshold to the images color range.
-    if threshold is not None:
-        threshold = im.norm(threshold)
-    else:
-        threshold = im.norm(data.max())/2.
-
-    # Set default alignment to center, but allow it to be
-    # overwritten by textkw.
-    kw = dict(horizontalalignment="center",
-              verticalalignment="center")
-    kw.update(textkw)
-
-    # Get the formatter in case a string is supplied
-    if isinstance(valfmt, str):
-        valfmt = matplotlib.ticker.StrMethodFormatter(valfmt)
-
-    # Loop over the data and create a `Text` for each "pixel".
-    # Change the text's color depending on the data.
-    texts = []
-    for i in range(data.shape[0]):
-        for j in range(data.shape[1]):
-            kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
-            if data[i,j] > 0.0:
-                text = im.axes.text(j, i, valfmt(data[i, j], None), **kw)
-                texts.append(text)
-
-    return texts
-    
-def makeHeatMap(values, xlabels, ylabels):
-    fig, ax = pyplot.subplots()
-
-    im, cbar = heatmap(values, ylabels, xlabels, ax=ax, cmap="Blues", cbarlabel="")
-    texts = annotate_heatmap(im, valfmt="{x:.2f}", fontsize=8)
-    
-    fig.savefig('heatmap.pdf')
-    
-def readPopCSV(fileName):
-    csvFile = open(fileName, 'r')
-    header = csvFile.readline()
-    columns = header.rstrip().split(',')
-    dataCols = []
-    for index in range(len(columns)):
-        if 'EVE' in columns[index] and 'frequency' in columns[index]:
-            dataCols.append(index)
-            
-    regions = []
-    data = []
-    for line in csvFile:
-        columns = line.rstrip().split(',')
-        if columns[0] != '':
-            regions.append(columns[0])
-            row = []
-            for index in dataCols:
-                row.append(float(columns[index]))
-            data.append(row)
-            
-    csvFile.close()
-    
-    return np.array(data), regions
+# def heatmap(data, row_labels, col_labels, ax=None, cbar_kw={}, cbarlabel="", **kwargs):
+#     """
+#     Create a heatmap from a numpy array and two lists of labels.
+# 
+#     Parameters
+#     ----------
+#     data
+#         A 2D numpy array of shape (N, M).
+#     row_labels
+#         A list or array of length N with the labels for the rows.
+#     col_labels
+#         A list or array of length M with the labels for the columns.
+#     ax
+#         A `matplotlib.axes.Axes` instance to which the heatmap is plotted.  If
+#         not provided, use current axes or create a new one.  Optional.
+#     cbar_kw
+#         A dictionary with arguments to `matplotlib.Figure.colorbar`.  Optional.
+#     cbarlabel
+#         The label for the colorbar.  Optional.
+#     **kwargs
+#         All other arguments are forwarded to `imshow`.
+#     """
+# 
+#     if not ax:
+#         ax = pyplot.gca()
+# 
+#     # Plot the heatmap
+#     im = ax.imshow(data, **kwargs)
+# 
+#     # Create colorbar
+#     cbar = ax.figure.colorbar(im, ax=ax, **cbar_kw)
+#     cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom")
+# 
+#     # We want to show all ticks...
+#     ax.set_xticks(np.arange(data.shape[1]))
+#     ax.set_yticks(np.arange(data.shape[0]))
+#     # ... and label them with the respective list entries.
+#     ax.set_xticklabels(col_labels, fontfamily='serif', fontweight='bold')
+#     ax.set_yticklabels(row_labels, fontfamily='serif', fontweight='bold')
+# 
+#     # Let the horizontal axes labeling appear on top.
+#     ax.tick_params(top=False, bottom=False, left=False,
+#                    labeltop=True, labelbottom=False)
+# 
+#     # Rotate the tick labels and set their alignment.
+#     pyplot.setp(ax.get_xticklabels(), rotation=0, ha="center",
+#              rotation_mode="anchor")
+# 
+#     # Turn spines off and create white grid.
+#     for edge, spine in ax.spines.items():
+#         spine.set_visible(False)
+# 
+#     ax.set_xticks(np.arange(data.shape[1]+1)-.5, minor=True)
+#     ax.set_yticks(np.arange(data.shape[0]+1)-.5, minor=True)
+#     ax.grid(which="minor", color="w", linestyle='-', linewidth=3)
+#     ax.tick_params(which="minor", bottom=False, left=False)
+# 
+#     return im, cbar
+# 
+# def annotate_heatmap(im, data=None, valfmt="{x:.2f}", textcolors=("black", "white"), threshold=None, **textkw):
+#     """
+#     A function to annotate a heatmap.
+# 
+#     Parameters
+#     ----------
+#     im
+#         The AxesImage to be labeled.
+#     data
+#         Data used to annotate.  If None, the image's data is used.  Optional.
+#     valfmt
+#         The format of the annotations inside the heatmap.  This should either
+#         use the string format method, e.g. "$ {x:.2f}", or be a
+#         `matplotlib.ticker.Formatter`.  Optional.
+#     textcolors
+#         A pair of colors.  The first is used for values below a threshold,
+#         the second for those above.  Optional.
+#     threshold
+#         Value in data units according to which the colors from textcolors are
+#         applied.  If None (the default) uses the middle of the colormap as
+#         separation.  Optional.
+#     **kwargs
+#         All other arguments are forwarded to each call to `text` used to create
+#         the text labels.
+#     """
+# 
+#     if not isinstance(data, (list, np.ndarray)):
+#         data = im.get_array()
+# 
+#     # Normalize the threshold to the images color range.
+#     if threshold is not None:
+#         threshold = im.norm(threshold)
+#     else:
+#         threshold = im.norm(data.max())/2.
+# 
+#     # Set default alignment to center, but allow it to be
+#     # overwritten by textkw.
+#     kw = dict(horizontalalignment="center",
+#               verticalalignment="center")
+#     kw.update(textkw)
+# 
+#     # Get the formatter in case a string is supplied
+#     if isinstance(valfmt, str):
+#         valfmt = matplotlib.ticker.StrMethodFormatter(valfmt)
+# 
+#     # Loop over the data and create a `Text` for each "pixel".
+#     # Change the text's color depending on the data.
+#     texts = []
+#     for i in range(data.shape[0]):
+#         for j in range(data.shape[1]):
+#             kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
+#             if data[i,j] > 0.0:
+#                 text = im.axes.text(j, i, valfmt(data[i, j], None), **kw)
+#                 texts.append(text)
+# 
+#     return texts
+#     
+# def makeHeatMap(values, xlabels, ylabels):
+#     fig, ax = pyplot.subplots()
+# 
+#     im, cbar = heatmap(values, ylabels, xlabels, ax=ax, cmap="Blues", cbarlabel="")
+#     texts = annotate_heatmap(im, valfmt="{x:.2f}", fontsize=8)
+#     
+#     fig.savefig('heatmap.pdf')
+#     
+# def readPopCSV(fileName):
+#     csvFile = open(fileName, 'r')
+#     header = csvFile.readline()
+#     columns = header.rstrip().split(',')
+#     dataCols = []
+#     for index in range(len(columns)):
+#         if 'EVE' in columns[index] and 'frequency' in columns[index]:
+#             dataCols.append(index)
+#             
+#     regions = []
+#     data = []
+#     for line in csvFile:
+#         columns = line.rstrip().split(',')
+#         if columns[0] != '':
+#             regions.append(columns[0])
+#             row = []
+#             for index in dataCols:
+#                 row.append(float(columns[index]))
+#             data.append(row)
+#             
+#     csvFile.close()
+#     
+#     return np.array(data), regions
     
 # data, regions = readPopCSV('/home/havill/data2/ortho freq.csv')
 # makeHeatMap(data, ['1', '2'], regions)
@@ -656,8 +664,8 @@ def getVirusSequences2(virusACC, vStart, vEnd, flankLength, outFileName, sort = 
     outFile2.close()
     
 #getVirusSequences2('MF176251.1', 148, 966, 100, 'ortho_flanks', 'right')
-getVirusSequences2('NC_001564.2', 0, None, 0, 'cfav', 'left')
-exit()
+#getVirusSequences2('NC_001564.2', 0, None, 0, 'cfav', 'left')
+#exit()
 
 ###############################################################################
 
