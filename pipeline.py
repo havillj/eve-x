@@ -6,7 +6,7 @@ from Bio import SeqIO, Entrez, AlignIO
 from Bio.Align import MultipleSeqAlignment
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 from dna_features_viewer import GraphicFeature, GraphicRecord, BiopythonTranslator
-from intervaltree import Interval, IntervalTree
+#from intervaltree import Interval, IntervalTree
 from lxml import etree as ET
 from multiprocessing import Process
 from pathlib import Path
@@ -14,18 +14,17 @@ import copy
 import math
 import numpy as np
 import os
-import pickle
+#import pickle
 import pysam
 import re
 import sys
 import time
 import urllib.request as web
 
+from util import *
 from hits import Hit, Hits
 from kmeans import findClusters
-from util import *
-
-iTrees = None
+from features import *
 
 ###############################################################################
 
@@ -68,33 +67,23 @@ def getUnmappedReads(filenameBAM):
         writelog('   Unmapped reads =', count, '({:.2f}%)'.format(100*count/count_total))
     else:
         writelog('   Skipping - ' + newFilenameBAM + ' exists.', True)
-
-    # Convert unmapped reads to FASTA.
-
-    writelog('Writing unmapped reads to a FASTA file...', True)
-    newFilenameFASTA = newFilenameBAM[:-4] + '.fasta'  # absolute path
-    if not Path(newFilenameFASTA).exists():
-        os.system('samtools fasta ' + newFilenameBAM + ' > ' + newFilenameFASTA)
-    else:
-        writelog('   Skipping - ' + newFilenameFASTA + ' exists.', True)
         
-    return newFilenameFASTA  # absolute path
+    return newFilenameBAM  # absolute path
     
 ###############################################################################
 
-def writeReadsFASTQ(viralFilenameBAM, virusName):
+def writeReadsFASTQ(viralFilenameBAM):
     """Write paired-end reads from BAM file to 3 FASTQ files.
     
        Parameters:
            viralFilenameBAM: absolute path of BAM file containing viral reads to assemble
-           virusName:        string containing the name of the virus
            
        Return value: None
     """
     
     writelog('Writing paired-end reads to FASTQ files...', True)
     
-    spadesPath = Path(viralFilenameBAM).parent / ('spades_' + virusName)
+    spadesPath = Path(viralFilenameBAM).parent / 'spades'
     
     if not spadesPath.exists():
         os.system('mkdir ' + str(spadesPath))
@@ -107,19 +96,18 @@ def writeReadsFASTQ(viralFilenameBAM, virusName):
     
 ###############################################################################
 
-def assembleReads(dirName, virusName):
-    """Assemble reads in dirName / spades_virusName into scaffolds.
+def assembleReads(dirName):
+    """Assemble reads in dirName / spades into scaffolds.
     
        Parameter: 
            dirName:   absolute path of parent of directory containing fastq files to assemble 
-           virusName: string containing the name of the virus
             
        Return value: Boolean indicating whether assembly was successful
     """
 
     writelog('Assembling reads with SPAdes...', True)
     
-    spadesPath = Path(dirName) / ('spades_' + virusName)
+    spadesPath = Path(dirName) / 'spades'
     if (spadesPath / 'scaffolds.fasta').exists():
         writelog('   Skipping - scaffolds.fasta exists.', True)
         return True
@@ -138,19 +126,19 @@ def assembleReads(dirName, virusName):
     
 ###############################################################################
     
-def blastScaffolds(dirName, virusName, virusDB, force = False):
+def blastScaffolds(dirName, force = False):
     """BLAST scaffolds against viral and aegypti genomes and combine to identify putative viral insertions."""
     
-    spadesPath = Path(dirName) / ('spades_' + virusName)
+    spadesPath = Path(dirName) / 'spades'
     scaffoldsName = str(spadesPath / 'scaffolds.fasta')
-    outVirusCSV = spadesPath / ('blast_scaffolds_' + virusName + '.csv')
+    outVirusCSV = spadesPath / 'blast_scaffolds.csv'
     
     writelog('BLASTing scaffolds against viral database...', True)
     
     if not force and outVirusCSV.exists():
         writelog('   Skipping - ' + str(outVirusCSV) + ' exists.', True)
     else:
-        os.system('blastn -query ' + scaffoldsName + ' -db ' + virusDB + ' -num_threads 16 -task blastn -evalue ' + str(EVALUE_V) +
+        os.system('blastn -query ' + scaffoldsName + ' -db ' + VIRUS_DB + ' -num_threads 16 -task blastn -evalue ' + str(EVALUE_V) +
                   ' -max_target_seqs 5000' +
                   ' -outfmt "10 qseqid qstart qend qseq sstart send sseq evalue bitscore sseqid stitle pident"' + 
                   ' -out ' + str(outVirusCSV))
@@ -266,24 +254,34 @@ def readCSVAA(csvFilename):
 
     return hits
 
-def getHits(dirName, virusName): #, maxFlankingHits):
+def getHits(dirName): #, maxFlankingHits):
     """Combine viral and vector BLAST results to find putative insertions.
     
        Parameters:
            dirName:   absolute path of parent of directory containing SPAdes results 
-           virusName: name of virus under consideration
            
        Return value: absolute path of XML file containing results
     """
     
     writelog('Combining BLAST results to locate putative insertions...', True)
     
-    spadesPath = Path(dirName) / ('spades_' + virusName)
-    csvVirusFilename = str(spadesPath / ('blast_scaffolds_' + virusName + '.csv'))
-    csvAedesFilename = str(spadesPath / 'blast_scaffolds_aa.csv')
-    xmlFilename = str(spadesPath / (Path(dirName).name + '_' + virusName + '_hits.xml'))
-    scaffoldsFilename = str(spadesPath / 'scaffolds.fasta')
-
+    spadesPath = Path(dirName) / 'spades'
+    resultsPath = Path(dirName) / 'results'
+    if not resultsPath.exists():
+        os.system('mkdir ' + str(resultsPath))
+    scaffoldsPath = resultsPath / 'scaffolds'
+    if not scaffoldsPath.exists():
+        os.system('mkdir ' + str(scaffoldsPath))
+    os.system('cp ' + str(spadesPath / 'scaffolds.fasta') + ' ' + str(scaffoldsPath))
+    os.system('cp ' + str(spadesPath / 'blast_scaffolds.csv') + ' ' + str(scaffoldsPath))
+    scaffoldsFilename = str(scaffoldsPath / 'scaffolds.fasta')
+    csvVirusFilename = str(scaffoldsPath / 'blast_scaffolds.csv')
+    
+    xmlPath = resultsPath / 'xml'
+    if not xmlPath.exists():
+        os.system('mkdir ' + str(xmlPath))
+    xmlFilename = str(xmlPath / (Path(dirName).name + '_hits.xml'))
+   
     virusHits = readCSV(csvVirusFilename)
     if virusHits is None:
         return None
@@ -626,198 +624,26 @@ def getHits(dirName, virusName): #, maxFlankingHits):
     return xmlFilename
 
 ###############################################################################
-
-def getGFFFeatures(fileName, iTrees):
-    """Read repeat features from a GFF3 file and insert into dictionary of interval trees."""
     
-    chromNumbers = {'1': 'NC_035107.1', '2': 'NC_035108.1', '3': 'NC_035109.1', 'MT': 'NC_035159.1'}
-    strands = {'+': +1, '-': -1, '.': 0}
-   
-    gff = open(fileName, 'r')
-    
-    for line in gff:
-        if line[0] == '#':
-            continue
-        
-        cols = line.strip().split('\t')
-        
-        seqid = cols[0]
-#        if seqid == 'MT':
-#            continue
-        if seqid in chromNumbers:
-            seqid = chromNumbers[seqid]
-        else:
-            seqid += '.1'
-            
-        if seqid not in iTrees:
-            iTrees[seqid] = IntervalTree()
-            
-        type = cols[2]
-#         if type in ['chromosome']:
-#             continue
-            
-        attrib = cols[8]
-        
-        if type == 'supercontig':
-            altID = re.findall(r'Alias=' + seqid + r',(.*)', attrib)  # in supercontig record
-            if len(altID) > 0:
-                altID = altID[0]
-                iTrees[altID] = iTrees[seqid]
-        elif type in ('gene', 'ncRNA_gene', 'exon', 'repeat_region'):
-            start = int(cols[3])
-            end = int(cols[4])
-            strand = strands[cols[6]]
-            f = SeqFeature()
-            f.location = FeatureLocation(start, end + 1, strand = strand)
-            f.type = type
-            findName = re.findall(r'Name=(.*?);.*', attrib)
-            if len(findName) > 0:
-                f.id = findName[0]
-            else:
-                findName = re.findall(r'ID=(.*?);.*', attrib)  # try again
-                if len(findName) > 0:
-                    f.id = findName[0]
-                else:
-                    f.id = 'Unknown'
-            iTrees[seqid][start:end+1] = f  # interval start <= x < end+1
-    
-    gff.close()
-                
-def makeIntervalTrees(dirName):
-    pickleName = str(Path(dirName) / 'featuretrees.pickle')
-    if Path(pickleName).exists():
-        writelog('Pickled feature trees found.  Reading...', True)
-        picklediTreesDict = open(pickleName, 'rb')
-        iTrees = pickle.load(picklediTreesDict)
-        picklediTreesDict.close()
-    else:
-        iTrees = {}
-        writelog('Reading base features...', True)
-        # https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/002/204/515/GCF_002204515.2_AaegL5.0/
-        getGFFFeatures('/home/havill/data/aegypti/gb/Aedes-aegypti-LVP_AGWG_BASEFEATURES_AaegL5.2.gff3', iTrees)
-    
-        writelog('Reading repeat features...', True)
-        getGFFFeatures('/home/havill/data/aegypti/gb/Aedes-aegypti-LVP_AGWG_REPEATFEATURES_AaegL5.gff3', iTrees)
-    
-        writelog('Writing feature trees to disk...', True)
-        picklediTreesDict = open(pickleName, 'wb')
-        pickle.dump(iTrees, picklediTreesDict)
-        picklediTreesDict.close()
-        
-    return iTrees
-    
-###############################################################################
-
-def searchAA(iTrees, seqid, start, end, hitElement, counts):
-    """Get features for a given interval and write to xml tree."""
-    
-#    searchInterval = Interval(start, end+1)
-    
-    overlapIntervals = iTrees[seqid][start:end]
-    allFeatureTypes = []
-    for interval in overlapIntervals:
-        f = interval.data                       # feature associated with interval
-#         if f.location_operator == 'join':       # mRNA with a CompoundLocation
-#             introns = getIntrons(f.location)
-#             featureType = None
-#             for intron in introns:
-#                 if intron.contains_interval(searchInterval):
-#                     featureType = 'in_intron'                 # wholly contained in an intron
-#                     break
-#                 elif intron.overlaps(searchInterval):
-#                     featureType = 'overlaps_intron'           # crosses an intron/exon boundary
-#                     break
-#                     
-#             if featureType is None:
-#                 if start in f.location and end in f.location:
-#                     featureType = 'in_exon'                   # wholly contained in an exon
-#                 else:
-#                     featureType = 'overlaps_end_exon'         # overlaps first or last exon
-#         else:
-        featureType = f.type
-        allFeatureTypes.append(featureType)
-                 
-        feature = ET.SubElement(hitElement, 'feature', {'type': featureType})
-        ET.SubElement(feature, 'location').text = str(f.location)
-        ET.SubElement(feature, 'type').text = f.type
-        ET.SubElement(feature, 'id').text = f.id
-        
-    if 'gene' in allFeatureTypes:
-        if 'exon' in allFeatureTypes:
-            counts['exon'] = counts.get('exon', 0) + 1
-        else:
-            counts['intron'] = counts.get('intron', 0) + 1
-    elif 'ncRNA_gene' in allFeatureTypes:
-        if 'exon' in allFeatureTypes:
-            counts['exon_ncRNA'] = counts.get('exon_ncRNA', 0) + 1
-        else:
-            counts['intron_ncRNA'] = counts.get('intron_ncRNA', 0) + 1
-    elif 'pseudogene' in allFeatureTypes:
-        if 'exon' in allFeatureTypes:
-            counts['exon_pseudogene'] = counts.get('exon_pseudogene', 0) + 1
-        else:
-            counts['intron_pseudogene'] = counts.get('intron_pseudogene', 0) + 1
-        
-    for featureType in set(allFeatureTypes):    # only count one repeat_region per sequence
-        if featureType not in ('gene', 'ncRNA_gene', 'pseudogene', 'exon'):
-            counts[featureType] = counts.get(featureType, 0) + 1
-    
-    if len(overlapIntervals) == 0:
-        counts['None'] += 1
-            
-def findFeatures(fileName, iTrees):
-    """Find all features in an xml file and insert them.
-    
-       Parameters:
-           fileName: absolute path of XML file containing hit results
-           iTrees:   dict of interval trees containing AA features
-           
-       Return value: absolute path of XML file augmented with features
-    """
-    
-    writelog('Annotating features...', True)
-    
-    parser = ET.XMLParser(remove_blank_text=True)  # lxml
-    tree = ET.parse(fileName, parser)
-    root = tree.getroot()
-    for contig in root:
-        counts = {'None': 0}
-        hitsLeft = contig.findall('vectorhitleft')
-        for v in hitsLeft:
-            start = int(v.find('sstart').text)
-            end = int(v.find('send').text)
-            seqid = v.attrib['seqid']
-            searchAA(iTrees, seqid, start, end, v, counts)
-            
-        hitsRight = contig.findall('vectorhitright')
-        for v in hitsRight:
-            start = int(v.find('sstart').text)
-            end = int(v.find('send').text)
-            seqid = v.attrib['seqid']
-            searchAA(iTrees, seqid, start, end, v, counts)
-            
-        featureSummary = ET.SubElement(contig, 'featuresummary')  # number of flanking hits with each feature
-        for ftype in counts:
-            ET.SubElement(featureSummary, ftype).text = str(counts[ftype])
-        
-    xmlFeaturesFilename = fileName[:-4] + '_features.xml'
-    tree.write(xmlFeaturesFilename, xml_declaration=True, pretty_print=True)
-    
-    return xmlFeaturesFilename
-    
-###############################################################################
-    
-def displayXML(fileName, outFileName, displaySeq = True):
+def displayXML(fileName, displaySeq = True):
     """Write XML results to human-readable text file.
     
        Parameters:
            fileName:    absolute path of XML results file
-           outFileName: absolute path of output text file
            displaySeq:  whether to write long version with all sequence alignments
            
        Return value: None
     """
     
+    txtPath = Path(fileName).parent.parent / 'txt'
+    if not txtPath.exists():
+        os.system('mkdir ' + str(txtPath))
+        
+    if displaySeq:
+        outFileName = str(txtPath / (Path(fileName).name[:-4] + '.txt'))
+    else:
+        outFileName = str(txtPath / (Path(fileName).name[:-4] + '_short.txt'))
+        
     outFile = open(outFileName, 'w')
     
     totalCounts = {}
@@ -869,70 +695,6 @@ def displayXML(fileName, outFileName, displaySeq = True):
                             outFile.write('      {2:<14} {0:>9} - {1:<9} {3}\n'.format(*s))
 #                            outFile.write('      {3:<14} {0:>9} - {1:<9} {2} {4}\n'.format(*s))
                         outFile.write('\n')
-
-#             hitsLeft = contig.findall('vectorhitleft')
-#             if len(hitsLeft) > 0:
-#                 hitsLeftDict = {}  # consolidate query hit: [subject hits]
-#                 for v in hitsLeft:
-#                     pos = (v.find('qstart').text, v.find('qend').text, v.find('qseq').text)
-#                     features = v.findall('feature')
-#                     featureString = '| '
-#                     for f in features:
-# #                         if displaySeq:
-#                         featureString += f.attrib['type'] + '; ' + f.find('id').text + '; ' + f.find('location').text + ' | '
-# #                         else:
-# #                             featureString += f.attrib['type'] + '; ' + f.find('id').text + ' | '
-#                     if pos not in hitsLeftDict:
-#                         hitsLeftDict[pos] = [(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString)]
-#                     else:
-#                         hitsLeftDict[pos].append((v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
-# #                 if displaySeq:
-#                 outFile.write('   Vector hits left: \n')
-#                 posSort = list(hitsLeftDict.keys())
-#                 posSort.sort(key = lambda pos: (int(pos[0]), int(pos[1])))
-#                 for q in posSort:
-# #                     if displaySeq:
-#                     outFile.write('      contig         {0:>9} - {1:<9} {2}\n'.format(*q))
-#                     for s in hitsLeftDict[q]:
-#                         outFile.write('      {3:<14} {0:>9} - {1:<9} {2} {4}\n'.format(*s))
-#                     outFile.write('\n')
-# #                     else:
-# #                         outFile.write('      contig         {0:>9} - {1:<9}\n'.format(*q))
-# #                         for s in hitsLeftDict[q]:
-# #                             outFile.write('      {3:<14} {0:>9} - {1:<9} {4}\n'.format(*s))
-# #                         outFile.write('\n')
-#         
-#             hitsRight = contig.findall('vectorhitright')
-#             if len(hitsRight) > 0:
-#                 hitsRightDict = {}  # consolidate query hit: [subject hits]
-#                 for v in hitsRight:
-#                     pos = (v.find('qstart').text, v.find('qend').text, v.find('qseq').text)
-#                     features = v.findall('feature')
-#                     featureString = '| '
-#                     for f in features:
-# #                         if displaySeq:
-#                         featureString += f.attrib['type'] + '; ' + f.find('id').text + '; ' + f.find('location').text + ' | '
-# #                         else:
-# #                             featureString += f.attrib['type'] + '; ' + f.find('id').text + ' | '
-#                     if pos not in hitsRightDict:
-#                         hitsRightDict[pos] = [(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString)]
-#                     else:
-#                         hitsRightDict[pos].append((v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
-# #                if displaySeq:
-#                 outFile.write('   Vector hits right: \n')
-#                 posSort = list(hitsRightDict.keys())
-#                 posSort.sort(key = lambda pos: (int(pos[0]), int(pos[1])))
-#                 for q in posSort:
-# #                     if displaySeq:
-#                     outFile.write('      contig         {0:>9} - {1:<9} {2}\n'.format(*q))
-#                     for s in hitsRightDict[q]:
-#                         outFile.write('      {3:<14} {0:>9} - {1:<9} {2} {4}\n'.format(*s))
-#                     outFile.write('\n')
-# #                     else:
-# #                         outFile.write('      contig         {0:>9} - {1:<9}\n'.format(*q))
-# #                         for s in hitsRightDict[q]:
-# #                             outFile.write('      {3:<14} {0:>9} - {1:<9} {4}\n'.format(*s))
-# #                         outFile.write('\n')
 
             flanks = contig.find('flanks')
             for matches, message in [(flanks.findall('match'), 'Matching flanking regions:'), (flanks.findall('inversion'), 'Inverted matching flanking regions:')]:
@@ -1023,23 +785,23 @@ def displayXML(fileName, outFileName, displaySeq = True):
             outFile.write('      {0:>18}: {1:>7}  {2:>7.2%}\n'.format(f, totalCounts[f], totalCounts[f] / totalFeatures))
     outFile.close()
     
-def drawXML(fileName, outputDir, bestHitsOnly = True):
+def drawXML(fileName):
     """Draw diagrams of contigs from XML file.
     
        Parameters:
            fileName:      absolute path of XML results file
-           outputDir:     absolute path of output directory
-           bestHitsOnly:  whether to draw all hits or only the best hits
            
        Return value: None
     """
     
     chromNames = {'NC_035107.1': 'Chr1', 'NC_035108.1': 'Chr2', 'NC_035109.1': 'Chr3'}
     
-    if not Path(outputDir).exists():
-        os.mkdir(outputDir)
+    diagramsPath = Path(fileName).parent.parent / 'diagrams'
+    
+    if not diagramsPath.exists():
+        os.mkdir(str(diagramsPath))
     else:
-        os.system('rm -r ' + outputDir + '/*')
+        os.system('rm -r ' + str(diagramsPath) + '/*')
         
     fams = readFamFile()
     
@@ -1060,7 +822,7 @@ def drawXML(fileName, outputDir, bestHitsOnly = True):
     root = tree.getroot()
     for contig in root:
         family = None
-        if bestHitsOnly and (contig.attrib['besthit'] != 'True'):
+        if BEST_HITS_ONLY and (contig.attrib['besthit'] != 'True'):
             continue
             
         p = re.compile(r'(.*)_length')
@@ -1103,7 +865,7 @@ def drawXML(fileName, outputDir, bestHitsOnly = True):
 #            if v.attrib['minevalue'] == 'True':
 #            if v.attrib['maxbitscore'] == 'True':
             stitle += ' (' + str(seqid) + ')'
-            if not bestHitsOnly and (contig.attrib['besthit'] == 'True'):
+            if not BEST_HITS_ONLY and (contig.attrib['besthit'] == 'True'):
 #                stitle = '**' + stitle.lstrip('|') + '**'
                 
                 if seqid not in fams:
@@ -1121,7 +883,7 @@ def drawXML(fileName, outputDir, bestHitsOnly = True):
                                            label = stitle.lstrip('|') + ' ' + str(sstart) + '-' + str(send) + ' (' + str(length) + ' bp; ' + str(pident) + '%)')  #; ' + str(evalue) + ')')
             features.append(gf)
             gfCopy = copy.deepcopy(gf)
-            if not bestHitsOnly and (contig.attrib['besthit'] == 'True'):
+            if not BEST_HITS_ONLY and (contig.attrib['besthit'] == 'True'):
                 gfCopy.label = '**' + stitle.lstrip('|') + '** ' + str(sstart) + '-' + str(send) + ' (' + str(length) + ' bp; ' + str(pident) + '%)'
             contigFeaturesV[c].append(gfCopy)
         families[c] = family
@@ -1266,7 +1028,7 @@ def drawXML(fileName, outputDir, bestHitsOnly = True):
         ax2.set_yticks([0, max(aaCoverage + [1]) // 2, max(aaCoverage + [1])])
         ax2.set_ylabel('Aa hits', fontsize = axesFontSize)
 
-        familyDir = str(Path(outputDir) / family)
+        familyDir = str(diagramsPath / family)
         if not Path(familyDir).exists():
             os.mkdir(familyDir)
         if contig.attrib['besthit'] == 'True':
@@ -1281,7 +1043,7 @@ def drawXML(fileName, outputDir, bestHitsOnly = True):
 #            fig.savefig(Path(familyDir) / (contig.attrib['name'] + '.pdf'))
         pyplot.close(fig)
         
-    if not bestHitsOnly:
+    if not BEST_HITS_ONLY:
         for c in contigFeaturesV:
             record = GraphicRecord(sequence_length = contigLengths[c], features = contigFeaturesV[c])
         
@@ -1290,41 +1052,40 @@ def drawXML(fileName, outputDir, bestHitsOnly = True):
     #        ax2.set_ylim(bottom = 0)
     #        ax2.set_ylabel('Aa hits')
 
-            familyDir = str(Path(outputDir) / families[c])
+            familyDir = str(diagramsPath / families[c])
             pp = PdfPages(str(Path(familyDir) / (c + '_all-viral-hits.pdf')))
             pp.savefig(ax.figure)
             pp.close()
-#            ax.figure.savefig(Path(familyDir) / (c + '_all-viral-hits.pdf'))
             pyplot.close(ax.figure)
                     
 ###############################################################################
 
-def copyResults():    
-    SPECIMENS_DIR = RESULTS_DIR + 'specimens/'
-    if not Path(SPECIMENS_DIR).exists():
-        os.system('mkdir ' + SPECIMENS_DIR)
-        
-    dirList = [dir for dir in Path(ROOT_DIR).iterdir() if dir.is_dir() and 'combined' not in dir.name]
-    count = 0
-    for dir in dirList:
-        count += 1
-        writelog('Copying results from ' + dir.name + ' (' + str(count) + '/' + str(len(dirList)) + ')', True)
-        if not Path(SPECIMENS_DIR + dir.name).exists():
-            os.system('mkdir ' + SPECIMENS_DIR + dir.name)
-            os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/xml')
-            os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/txt')
-#            os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/sequences')
-            os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/scaffolds')
-            os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/diagrams')
-        
-        os.system('cp ' + str(dir / 'spades_all') + '/*_all_hits*.xml ' + SPECIMENS_DIR + dir.name + '/xml')
-        os.system('cp ' + str(dir / 'spades_all') + '/*_all_hits*.txt ' + SPECIMENS_DIR + dir.name + '/txt')
-        os.system('cp ' + str(dir / 'spades_all') + '/scaffolds.fasta ' + SPECIMENS_DIR + dir.name + '/scaffolds')
-        os.system('cp ' + str(dir / 'spades_all') + '/blast_scaffolds_all.csv ' + SPECIMENS_DIR + dir.name + '/scaffolds')
-        os.system('cp -r ' + str(dir / 'spades_all') + '/diagrams/* ' + SPECIMENS_DIR + dir.name + '/diagrams')
-#        os.system('cp ' + ROOT + '/../results/HITS_all/' + dir.name + '_all_hits.fasta ' + SPECIMENS_DIR + dir.name + '/sequences')
-        
-    return True
+# def copyResults():    
+#     SPECIMENS_DIR = RESULTS_DIR + 'specimens/'
+#     if not Path(SPECIMENS_DIR).exists():
+#         os.system('mkdir ' + SPECIMENS_DIR)
+#         
+#     dirList = [dir for dir in Path(ROOT_DIR).iterdir() if dir.is_dir() and 'combined' not in dir.name]
+#     count = 0
+#     for dir in dirList:
+#         count += 1
+#         writelog('Copying results from ' + dir.name + ' (' + str(count) + '/' + str(len(dirList)) + ')', True)
+#         if not Path(SPECIMENS_DIR + dir.name).exists():
+#             os.system('mkdir ' + SPECIMENS_DIR + dir.name)
+#             os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/xml')
+#             os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/txt')
+# #            os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/sequences')
+#             os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/scaffolds')
+#             os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/diagrams')
+#         
+#         os.system('cp ' + str(dir / 'spades') + '/*_hits*.xml ' + SPECIMENS_DIR + dir.name + '/xml')
+#         os.system('cp ' + str(dir / 'spades') + '/*_hits*.txt ' + SPECIMENS_DIR + dir.name + '/txt')
+#         os.system('cp ' + str(dir / 'spades') + '/scaffolds.fasta ' + SPECIMENS_DIR + dir.name + '/scaffolds')
+#         os.system('cp ' + str(dir / 'spades') + '/blast_scaffolds.csv ' + SPECIMENS_DIR + dir.name + '/scaffolds')
+#         os.system('cp -r ' + str(dir / 'spades') + '/diagrams/* ' + SPECIMENS_DIR + dir.name + '/diagrams')
+# #        os.system('cp ' + ROOT + '/../results/HITS_all/' + dir.name + '_all_hits.fasta ' + SPECIMENS_DIR + dir.name + '/sequences')
+#         
+#     return True
 
 ###############################################################################
 
@@ -1393,183 +1154,183 @@ def reverseComplement(dna):
 # #        pyplot.savefig('insertpositions_' + seqid + '.pdf')
 #         pyplot.close(fig)
         
-def drawInsertSites(clusteredFileName, insertSites, seqid, stitle, specimen2Label, familyDir):
-    lengths = {'NC_035107.1': 310827022, 'NC_035108.1': 474425716, 'NC_035109.1': 409777670}
-    chromNumber = {'NC_035107.1': 1, 'NC_035108.1': 2, 'NC_035109.1': 3}
-    
-    aln = AlignIO.read(clusteredFileName, 'fasta') # Bio.Align.MultipleSeqAlignment object
-    
-    y = 0
-    yvalues = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-    xvalues = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-    ylabels  = []
-    colors = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-    positions = {} # {'NC_035107.1': {}, 'NC_035108.1': {}, 'NC_035109.1': {}}
-        
-    for i in range(1, len(aln)):
-        desc = aln[i].description
-        parts = desc.split('_|_')
-        cluster = parts[0]
-        specimen = parts[1]
-        contig = parts[2]
-        
-        region, num = specimen2Label[specimen]
-        ylabels.append(cluster + ' ' + region + ' ' + str(num) + ' ' + contig)
-        
-        if cluster not in yvalues:
-            yvalues[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-            xvalues[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-            colors[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-            positions[cluster] = {'NC_035107.1': {}, 'NC_035108.1': {}, 'NC_035109.1': {}}
-#            ylabels[cluster] = []
-#            y[cluster] = 0
-        
-        for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['left']:
-            if chromID in lengths:
-                yvalues[cluster][chromID].append(y)
-                xvalues[cluster][chromID].append(position)
-                colors[cluster][chromID].append('#929000')
-                if position not in positions[cluster][chromID]:
-                    positions[cluster][chromID][position] = []
-                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'left'))
-        for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['right']:
-            if chromID in lengths:
-                yvalues[cluster][chromID].append(y)
-                xvalues[cluster][chromID].append(position)
-                colors[cluster][chromID].append('#ff2600')
-                if position not in positions[cluster][chromID]:
-                    positions[cluster][chromID][position] = []
-                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'right'))
-        for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['match']:
-            if chromID in lengths:
-                if position[0] > position[1]:
-                    position = position[::-1]
-                yvalues[cluster][chromID].append(y)
-                xvalues[cluster][chromID].append(position[0])
-                colors[cluster][chromID].append('#ff40ff')
-                if position not in positions[cluster][chromID]:
-                    positions[cluster][chromID][position] = []
-                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'match'))
-        for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['inversion']:
-            if chromID in lengths:
-                if position[0] > position[1]:
-                    position = position[::-1]
-                yvalues[cluster][chromID].append(y)
-                xvalues[cluster][chromID].append(position[0])
-                colors[cluster][chromID].append('#5e5e5e')
-                if position not in positions[cluster][chromID]:
-                    positions[cluster][chromID][position] = []
-                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'inversion'))
-        y += 1
-        
-    fig, ax = pyplot.subplots(1, 3, sharey = True, figsize = (7, 10), gridspec_kw = {'width_ratios': [1, lengths['NC_035108.1']/lengths['NC_035107.1'], lengths['NC_035109.1']/lengths['NC_035107.1']]})
-    fig.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99, wspace = 0.0)
-    ax[0].set_yticks(range(len(aln) - 1))
-    ax[0].set_yticklabels(ylabels)
-    ax[0].set_ylim(0, len(aln) - 1)
-    ax[0].invert_yaxis()
-    chrCount = 0
-    xtickPositions = [[0, int(1e8), int(2e8), int(3e8)], [0, int(1e8), int(2e8), int(3e8), int(4e8)], [0, int(1e8), int(2e8), int(3e8), int(4e8)]]
-    xtickLabels = [['', '100M', '200M', '300M'], ['', '100M', '200M', '300M', '400M'], ['', '100M', '200M', '300M', '400M']]
-    for chromID in lengths:
-        for cluster in yvalues:
-            ax[chrCount].scatter(xvalues[cluster][chromID], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
-        ax[chrCount].tick_params(labelsize = 3)
-        if chrCount > 0:
-            ax[chrCount].tick_params(left=False)
-        #pyplot.axvline(x = lengths['NC_035107.1'], linewidth=0.5, color='black')
-        #pyplot.axvline(x = lengths['NC_035107.1'] + lengths['NC_035108.1'], linewidth=0.5, color='black')
-        #pyplot.xticks(range(int(1e8), sum(lengths.values()), int(1e8)), [str(x)+'M' for x in range(100, lengths['NC_035107.1'] // int(1e6), 100)])
-        ax[chrCount].set_xticks(xtickPositions[chrCount])
-        ax[chrCount].set_xticklabels(xtickLabels[chrCount])
-        ax[chrCount].set_xlim(0, lengths[chromID])
-        ax[chrCount].set_xlabel('Chromosome ' + str(chrCount + 1), fontsize=4)
-        chrCount += 1
-
-#     fig = pyplot.figure(figsize=(7, 10))
-#     xoffset = 0
+# def drawInsertSites(clusteredFileName, insertSites, seqid, stitle, specimen2Label, familyDir):
+#     lengths = {'NC_035107.1': 310827022, 'NC_035108.1': 474425716, 'NC_035109.1': 409777670}
+#     chromNumber = {'NC_035107.1': 1, 'NC_035108.1': 2, 'NC_035109.1': 3}
+#     
+#     aln = AlignIO.read(clusteredFileName, 'fasta') # Bio.Align.MultipleSeqAlignment object
+#     
+#     y = 0
+#     yvalues = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+#     xvalues = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+#     ylabels  = []
+#     colors = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+#     positions = {} # {'NC_035107.1': {}, 'NC_035108.1': {}, 'NC_035109.1': {}}
+#         
+#     for i in range(1, len(aln)):
+#         desc = aln[i].description
+#         parts = desc.split('_|_')
+#         cluster = parts[0]
+#         specimen = parts[1]
+#         contig = parts[2]
+#         
+#         region, num = specimen2Label[specimen]
+#         ylabels.append(cluster + ' ' + region + ' ' + str(num) + ' ' + contig)
+#         
+#         if cluster not in yvalues:
+#             yvalues[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+#             xvalues[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+#             colors[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+#             positions[cluster] = {'NC_035107.1': {}, 'NC_035108.1': {}, 'NC_035109.1': {}}
+# #            ylabels[cluster] = []
+# #            y[cluster] = 0
+#         
+#         for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['left']:
+#             if chromID in lengths:
+#                 yvalues[cluster][chromID].append(y)
+#                 xvalues[cluster][chromID].append(position)
+#                 colors[cluster][chromID].append('#929000')
+#                 if position not in positions[cluster][chromID]:
+#                     positions[cluster][chromID][position] = []
+#                 positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'left'))
+#         for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['right']:
+#             if chromID in lengths:
+#                 yvalues[cluster][chromID].append(y)
+#                 xvalues[cluster][chromID].append(position)
+#                 colors[cluster][chromID].append('#ff2600')
+#                 if position not in positions[cluster][chromID]:
+#                     positions[cluster][chromID][position] = []
+#                 positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'right'))
+#         for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['match']:
+#             if chromID in lengths:
+#                 if position[0] > position[1]:
+#                     position = position[::-1]
+#                 yvalues[cluster][chromID].append(y)
+#                 xvalues[cluster][chromID].append(position[0])
+#                 colors[cluster][chromID].append('#ff40ff')
+#                 if position not in positions[cluster][chromID]:
+#                     positions[cluster][chromID][position] = []
+#                 positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'match'))
+#         for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['inversion']:
+#             if chromID in lengths:
+#                 if position[0] > position[1]:
+#                     position = position[::-1]
+#                 yvalues[cluster][chromID].append(y)
+#                 xvalues[cluster][chromID].append(position[0])
+#                 colors[cluster][chromID].append('#5e5e5e')
+#                 if position not in positions[cluster][chromID]:
+#                     positions[cluster][chromID][position] = []
+#                 positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'inversion'))
+#         y += 1
+#         
+#     fig, ax = pyplot.subplots(1, 3, sharey = True, figsize = (7, 10), gridspec_kw = {'width_ratios': [1, lengths['NC_035108.1']/lengths['NC_035107.1'], lengths['NC_035109.1']/lengths['NC_035107.1']]})
+#     fig.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99, wspace = 0.0)
+#     ax[0].set_yticks(range(len(aln) - 1))
+#     ax[0].set_yticklabels(ylabels)
+#     ax[0].set_ylim(0, len(aln) - 1)
+#     ax[0].invert_yaxis()
+#     chrCount = 0
+#     xtickPositions = [[0, int(1e8), int(2e8), int(3e8)], [0, int(1e8), int(2e8), int(3e8), int(4e8)], [0, int(1e8), int(2e8), int(3e8), int(4e8)]]
+#     xtickLabels = [['', '100M', '200M', '300M'], ['', '100M', '200M', '300M', '400M'], ['', '100M', '200M', '300M', '400M']]
 #     for chromID in lengths:
 #         for cluster in yvalues:
-#             pyplot.scatter([x + xoffset for x in xvalues[cluster][chromID]], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
-#         xoffset += lengths[chromID]
-#             
-#     pyplot.tick_params(labelsize = 3)
-#     pyplot.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99)
-#     pyplot.yticks(range(len(aln) - 1), ylabels)
-#     pyplot.gca().invert_yaxis()
-#     pyplot.axvline(x = lengths['NC_035107.1'], linewidth=0.5, color='black')
-#     pyplot.axvline(x = lengths['NC_035107.1'] + lengths['NC_035108.1'], linewidth=0.5, color='black')
-#     #pyplot.xticks(range(int(1e8), sum(lengths.values()), int(1e8)), [str(x)+'M' for x in range(100, lengths['NC_035107.1'] // int(1e6), 100)])
-#     xtickPositions = [0, int(1e8), int(2e8), int(3e8), lengths['NC_035107.1']+int(1e8), lengths['NC_035107.1']+int(2e8), lengths['NC_035107.1']+int(3e8), lengths['NC_035107.1']+int(4e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(1e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(2e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(3e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(4e8)]
-#     xtickLabels = ['0', '100M', '200M', '300M', '100M', '200M', '300M', '400M', '100M', '200M', '300M', '400M']
-#     pyplot.xticks(xtickPositions, xtickLabels)
-#     pyplot.xlim(0, sum(lengths.values()))
-    fig.suptitle('EVE insertion positions for ' + seqid, fontsize = 6, fontweight = 'bold', y = 0.98)
-
-    saveFileName = familyDir + '/insertpositions_' + seqid
-    pp = PdfPages(saveFileName + '.pdf')
-    pp.savefig(fig)
-    pp.close()
-    pyplot.close(fig)
-
-    for chromID in lengths:
-        textPositionFile = open(saveFileName + '_chr' + str(chromNumber[chromID]) + '.txt', 'w')
-        for cluster in positions:
-            textPositionFile.write('Cluster ' + cluster[1:] + '\n')
-            sortedPositions = list(positions[cluster][chromID].keys())
-            sortedPositions.sort(key=lambda x: x[0] if isinstance(x, tuple) else x)
-            for position in sortedPositions:
-                if len(positions[cluster][chromID][position]) >= MIN_HITS_TO_SHOW_POSITION:
-                    textPositionFile.write(str(position) + '\t')
-                    countsByRegion = {}
-                    line = '\t'
-                    for specimen, contig, type in positions[cluster][chromID][position]:
-                        region = specimen.split('_')[0]
-                        if region not in countsByRegion:
-                            countsByRegion[region] = 0
-                        countsByRegion[region] += 1
-                        if isinstance(position, tuple):
-                            line += specimen + ' (' + type + ')\t'   # include match/inversion if tuple
-                        else:
-                            line += specimen + '\t'
-                    for region in countsByRegion:
-                        line = ', ' + region + ': ' + str(countsByRegion[region]) + line
-                    textPositionFile.write(line[2:] + '\n')
-        textPositionFile.close()
-
-#     textPositionFile = open(saveFileName + '.txt', 'w')
-#     for index in range(len(aln) - 1):
-#         textPositionFile.write(ylabels[index] + '\t')
-#         for index2 in range(len(yvalues[cluster][chromID])):
-#             if yvalues[cluster][chromID][index2] == index:
-#                 textPositionFile.write(str(xvalues[cluster][chromID][index2]) + '\t')
-#         textPositionFile.write('\n')
-#     textPositionFile.close()
-    
-    # for chromID in lengths:
-#         for cluster in yvalues:
-#             fig = pyplot.figure(figsize=(7, 10))
-#             pyplot.scatter(xvalues[cluster][chromID], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
-#             pyplot.tick_params(labelsize = 3)
-#             pyplot.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99)
-#             pyplot.yticks(range(y[cluster]), ylabels[cluster])
-#             pyplot.xticks(range(int(1e8), lengths[chromID], int(1e8)), [str(x)+'M' for x in range(100, lengths[chromID] // int(1e6), 100)])
-#             fig.suptitle('EVE insertion positions for ' + seqid + ', cluster ' + cluster[1:] + ', in chromosome ' + str(chromNumber[chromID]), fontsize = 6, fontweight = 'bold', y = 0.98)
-#         
-#             saveFileName = familyDir + '/insertpositions_' + seqid + '_' + cluster + '_chr' + str(chromNumber[chromID])
-#             pp = PdfPages(saveFileName + '.pdf')
-#             pp.savefig(fig)
-#             pp.close()
-#             pyplot.close(fig)
+#             ax[chrCount].scatter(xvalues[cluster][chromID], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
+#         ax[chrCount].tick_params(labelsize = 3)
+#         if chrCount > 0:
+#             ax[chrCount].tick_params(left=False)
+#         #pyplot.axvline(x = lengths['NC_035107.1'], linewidth=0.5, color='black')
+#         #pyplot.axvline(x = lengths['NC_035107.1'] + lengths['NC_035108.1'], linewidth=0.5, color='black')
+#         #pyplot.xticks(range(int(1e8), sum(lengths.values()), int(1e8)), [str(x)+'M' for x in range(100, lengths['NC_035107.1'] // int(1e6), 100)])
+#         ax[chrCount].set_xticks(xtickPositions[chrCount])
+#         ax[chrCount].set_xticklabels(xtickLabels[chrCount])
+#         ax[chrCount].set_xlim(0, lengths[chromID])
+#         ax[chrCount].set_xlabel('Chromosome ' + str(chrCount + 1), fontsize=4)
+#         chrCount += 1
 # 
-#             textPositionFile = open(saveFileName + '.txt', 'w')
-#             for index in range(y[cluster] - 1, -1, -1):
-#                 textPositionFile.write(ylabels[cluster][index] + '\t')
-#                 for index2 in range(len(yvalues[cluster][chromID])):
-#                     if yvalues[cluster][chromID][index2] == index:
-#                         textPositionFile.write(str(xvalues[cluster][chromID][index2]) + '\t')
-#                 textPositionFile.write('\n')
-#             textPositionFile.close()
+# #     fig = pyplot.figure(figsize=(7, 10))
+# #     xoffset = 0
+# #     for chromID in lengths:
+# #         for cluster in yvalues:
+# #             pyplot.scatter([x + xoffset for x in xvalues[cluster][chromID]], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
+# #         xoffset += lengths[chromID]
+# #             
+# #     pyplot.tick_params(labelsize = 3)
+# #     pyplot.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99)
+# #     pyplot.yticks(range(len(aln) - 1), ylabels)
+# #     pyplot.gca().invert_yaxis()
+# #     pyplot.axvline(x = lengths['NC_035107.1'], linewidth=0.5, color='black')
+# #     pyplot.axvline(x = lengths['NC_035107.1'] + lengths['NC_035108.1'], linewidth=0.5, color='black')
+# #     #pyplot.xticks(range(int(1e8), sum(lengths.values()), int(1e8)), [str(x)+'M' for x in range(100, lengths['NC_035107.1'] // int(1e6), 100)])
+# #     xtickPositions = [0, int(1e8), int(2e8), int(3e8), lengths['NC_035107.1']+int(1e8), lengths['NC_035107.1']+int(2e8), lengths['NC_035107.1']+int(3e8), lengths['NC_035107.1']+int(4e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(1e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(2e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(3e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(4e8)]
+# #     xtickLabels = ['0', '100M', '200M', '300M', '100M', '200M', '300M', '400M', '100M', '200M', '300M', '400M']
+# #     pyplot.xticks(xtickPositions, xtickLabels)
+# #     pyplot.xlim(0, sum(lengths.values()))
+#     fig.suptitle('EVE insertion positions for ' + seqid, fontsize = 6, fontweight = 'bold', y = 0.98)
+# 
+#     saveFileName = familyDir + '/insertpositions_' + seqid
+#     pp = PdfPages(saveFileName + '.pdf')
+#     pp.savefig(fig)
+#     pp.close()
+#     pyplot.close(fig)
+# 
+#     for chromID in lengths:
+#         textPositionFile = open(saveFileName + '_chr' + str(chromNumber[chromID]) + '.txt', 'w')
+#         for cluster in positions:
+#             textPositionFile.write('Cluster ' + cluster[1:] + '\n')
+#             sortedPositions = list(positions[cluster][chromID].keys())
+#             sortedPositions.sort(key=lambda x: x[0] if isinstance(x, tuple) else x)
+#             for position in sortedPositions:
+#                 if len(positions[cluster][chromID][position]) >= MIN_HITS_TO_SHOW_POSITION:
+#                     textPositionFile.write(str(position) + '\t')
+#                     countsByRegion = {}
+#                     line = '\t'
+#                     for specimen, contig, type in positions[cluster][chromID][position]:
+#                         region = specimen.split('_')[0]
+#                         if region not in countsByRegion:
+#                             countsByRegion[region] = 0
+#                         countsByRegion[region] += 1
+#                         if isinstance(position, tuple):
+#                             line += specimen + ' (' + type + ')\t'   # include match/inversion if tuple
+#                         else:
+#                             line += specimen + '\t'
+#                     for region in countsByRegion:
+#                         line = ', ' + region + ': ' + str(countsByRegion[region]) + line
+#                     textPositionFile.write(line[2:] + '\n')
+#         textPositionFile.close()
+# 
+# #     textPositionFile = open(saveFileName + '.txt', 'w')
+# #     for index in range(len(aln) - 1):
+# #         textPositionFile.write(ylabels[index] + '\t')
+# #         for index2 in range(len(yvalues[cluster][chromID])):
+# #             if yvalues[cluster][chromID][index2] == index:
+# #                 textPositionFile.write(str(xvalues[cluster][chromID][index2]) + '\t')
+# #         textPositionFile.write('\n')
+# #     textPositionFile.close()
+#     
+#     # for chromID in lengths:
+# #         for cluster in yvalues:
+# #             fig = pyplot.figure(figsize=(7, 10))
+# #             pyplot.scatter(xvalues[cluster][chromID], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
+# #             pyplot.tick_params(labelsize = 3)
+# #             pyplot.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99)
+# #             pyplot.yticks(range(y[cluster]), ylabels[cluster])
+# #             pyplot.xticks(range(int(1e8), lengths[chromID], int(1e8)), [str(x)+'M' for x in range(100, lengths[chromID] // int(1e6), 100)])
+# #             fig.suptitle('EVE insertion positions for ' + seqid + ', cluster ' + cluster[1:] + ', in chromosome ' + str(chromNumber[chromID]), fontsize = 6, fontweight = 'bold', y = 0.98)
+# #         
+# #             saveFileName = familyDir + '/insertpositions_' + seqid + '_' + cluster + '_chr' + str(chromNumber[chromID])
+# #             pp = PdfPages(saveFileName + '.pdf')
+# #             pp.savefig(fig)
+# #             pp.close()
+# #             pyplot.close(fig)
+# # 
+# #             textPositionFile = open(saveFileName + '.txt', 'w')
+# #             for index in range(y[cluster] - 1, -1, -1):
+# #                 textPositionFile.write(ylabels[cluster][index] + '\t')
+# #                 for index2 in range(len(yvalues[cluster][chromID])):
+# #                     if yvalues[cluster][chromID][index2] == index:
+# #                         textPositionFile.write(str(xvalues[cluster][chromID][index2]) + '\t')
+# #                 textPositionFile.write('\n')
+# #             textPositionFile.close()
 
 def getSeqRecord(fileNameFASTA):
     try:
@@ -1596,7 +1357,7 @@ def getSeqRecord(fileNameFASTA):
     
     return refRecord
         
-def writeSummaryTable(fileName, viralHits, viralHits0, viralHits1, viralHits2, allFamilies, allViruses, omitInReference):
+def writeSummaryTable(fileName, viralHits, viralHits0, viralHits1, viralHits2, allFamilies, allViruses):
     out = open(fileName, 'w')
 
     famVir = list(zip(allFamilies, allViruses))
@@ -1619,7 +1380,7 @@ def writeSummaryTable(fileName, viralHits, viralHits0, viralHits1, viralHits2, a
             foundInSpecimen = False
             for hit in viralHits[specimen]:  # hit = (seqid, stitle, hitDict) in one contig
                 if hit[0] == seqid:
-                    if omitInReference and (specimen in viralHits0) and (hit in viralHits0[specimen]):  # overlapping vector hit
+                    if OMIT_EVES_IN_REFERENCE and (specimen in viralHits0) and (hit in viralHits0[specimen]):  # overlapping vector hit
                         continue
                     foundInSpecimen = True
                     break
@@ -1664,7 +1425,7 @@ def writeSummaryTable(fileName, viralHits, viralHits0, viralHits1, viralHits2, a
             rangeList = []
             for hit in viralHits[specimen]:  # hit = (seqid, stitle, hitDict) in one contig
                 if hit[0] == seqid:
-                    if omitInReference and (specimen in viralHits0) and (hit in viralHits0[specimen]):  # overlapping vector hit
+                    if OMIT_EVES_IN_REFERENCE and (specimen in viralHits0) and (hit in viralHits0[specimen]):  # overlapping vector hit
                         continue
                     hitDict = hit[2]
                     qpos = list(hitDict.keys())
@@ -1712,28 +1473,19 @@ def writeSummaryTable(fileName, viralHits, viralHits0, viralHits1, viralHits2, a
         
     out.close()   
 
-def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
-    """Consolidate all results for a particular virus.
+def consolidateAll():
+    """Consolidate all results.
        Write a tab-delimited table summarizing hit regions for all specimens.
        Write a FASTA file containing specimen EV regions aligned to viral reference genome
     
        Parameters:
-           virusName:   name of the virus
            virusLength: length of the virus reference genome
            
        Return value: None
     """
     
-#    cp */spades_all/*all_hits.xml ../results/HITS_all
-    
     writelog('Consolidating results in ' + RESULTS_DIR + '...', True)
-    
-#     dirList = [dir for dir in Path(ROOT).iterdir() if dir.is_dir() and 'combined' not in dir.name]
-#     for dir in dirList:
-#         spadesPath = dir / ('spades_' + virusName)
-#         xmlFilename = spadesPath / (Path(dir).name + '_' + virusName + '_hits.xml')
-#         if xmlFilename.exists():
-    
+        
     viralHits1 = {}
     viralHits2 = {}
     viralHits0 = {}   # with AA overlap
@@ -1745,9 +1497,9 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
     insertSites = {}
     
     xmlFiles = []
-    specimensPath = Path(RESULTS_DIR + 'specimens/').resolve()
+    specimensPath = Path(SPECIMENS_DIR)
     for specimenDir in specimensPath.iterdir():
-        for file in (specimenDir / 'xml').iterdir():
+        for file in (specimenDir / 'results/xml').iterdir():
             if ('_hits_features.xml' in file.name) or (('_hits.xml' in file.name) and not Path(str(file)[:-4] + '_features.xml').exists()):
                 xmlFiles.append(file.resolve())
     xmlFiles.sort()
@@ -1756,18 +1508,18 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
     label2Specimen = {}
     specimenCount = 1
     for file in xmlFiles:
-        specimen = file.name.split('_' + virusName)[0]
+        specimen = file.name.split('_hits')[0]
         region, num = getSpecimenLabel(specimen)
         region = region.replace(' ', '-')
         specimen2Label[specimen] = (region, num)
         label2Specimen[(region, num)] = specimen
         writelog('  Processing ' + str(specimenCount) + '/' + str(len(xmlFiles)) + ': ' + specimen, True)
         specimenCount += 1
-        specimenSequencesDir = RESULTS_DIR + 'specimens/' + specimen + '/sequences/'
-        if not Path(specimenSequencesDir).exists():
-            os.system('mkdir ' + specimenSequencesDir)
-        virus_fasta = open(specimenSequencesDir + specimen + '_' + virusName + '_hits.fasta', 'w')
-        virus_fasta_percontig = open(specimenSequencesDir + specimen + '_' + virusName + '_hits2.fasta', 'w')
+        seqPath = file.parent.parent / 'sequences'
+        if not seqPath.exists():
+            os.system('mkdir ' + str(seqPath))
+        virus_fasta = open(str(seqPath / (specimen + '_hits_aligned.fasta')), 'w')
+        virus_fasta_percontig = open(str(seqPath / (specimen + '_hits_unaligned.fasta')), 'w')
 
         # Parse XML tree.
         
@@ -1786,7 +1538,7 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
             if '|' in stitle:
                 stitle = stitle.lstrip('|')
             
-            if bestHitsOnly and (contig.attrib['besthit'] != 'True'):  # and (stitle not in PREFERRED_ACCS):  # last condition may result in >1 hit per original contig
+            if BEST_HITS_ONLY and (contig.attrib['besthit'] != 'True'):  # and (stitle not in PREFERRED_ACCS):  # last condition may result in >1 hit per original contig
                 continue
             
             if (seqid, stitle) not in viralSeqs:
@@ -2175,7 +1927,7 @@ def consolidateAll(virusName, bestHitsOnly = True, omitInReference = True):
         seqOut.close()
         seqOutPerContig.close()
 
-    writeSummaryTable(str(Path(RESULTS_DIR) / ('results_' + virusName + '.tsv')), viralHits, viralHits0, viralHits1, viralHits2, allFamilies, allViruses, omitInReference)
+    writeSummaryTable(str(Path(RESULTS_DIR) / 'results.tsv'), viralHits, viralHits0, viralHits1, viralHits2, allFamilies, allViruses)
 
 ###############################################################################
                
@@ -2231,11 +1983,10 @@ class MyCustomTranslator(BiopythonTranslator):
         else:
             return [feature for feature in filtered_features1 if 'product' not in feature.qualifiers or feature.qualifiers['product'][0] != 'polyprotein']
 
-def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL5_hits, showPlot, small, omitInReference):    
+def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL5_hits, showPlot, small):    
 
 #    hits = getHits(acc)
 
-    VIRUSES_DIR = RESULTS_DIR + 'viruses/'
     if not Path(VIRUSES_DIR).exists():
         os.system('mkdir ' + VIRUSES_DIR)
     DIAGRAMS_DIR = VIRUSES_DIR + 'diagrams/'
@@ -2284,7 +2035,7 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL
             elif '3' in f.label:
                 codingEnd = f.start   # starts are actual start - 1 for some reason
                 
-    virusRecord2 = SeqIO.read('/home/havill/data/aegypti/gb/' + acc + '.gb', 'gb')  # SeqRecord
+    virusRecord2 = SeqIO.read(GB_DIR + acc + '.gb', 'gb')  # SeqRecord
     if isFamily:
         virusName = 'Family ' + family + ' (' + virusRecord2.id + ': ' + virusRecord2.description[:80]
         if len(virusRecord2.description) > 80:
@@ -2464,17 +2215,17 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL
 #        fig.savefig(Path(FAMILY_DIR) / figName)
         pyplot.close(fig)
 
-def getHitsForDiagram(omitInReference = True):
+def getHitsForDiagram():
     writelog('  Reading hits for diagrams...', True)
-    dir = Path(RESULTS_DIR + 'specimens/')
+    dir = Path(SPECIMENS_DIR)
     subdirs = [d for d in dir.iterdir()]
-    files = [d / ('xml/' + d.name + '_all_hits_features.xml') for d in subdirs ]
+    files = [d / ('results/xml/' + d.name + '_hits.xml') for d in subdirs ]
     files.sort()
 
     allVirusHits = {}
     allSpecimens = []
     for file in files:
-        specimen = file.name.rstrip('_all_hits_features.xml')
+        specimen = file.name.split('_hits')[0]
 #        writelog('Getting hits for ' + specimen + '...', True)
         allSpecimens.append(specimen)
         tree = ET.parse(str(file))
@@ -2488,7 +2239,7 @@ def getHitsForDiagram(omitInReference = True):
                 referenceOverlaps = eval(contig.attrib['referenceoverlaps'])
             else:
                 referenceOverlaps = []
-            if omitInReference and overlap:
+            if OMIT_EVES_IN_REFERENCE and overlap:
                 continue
             virushits = contig.findall('virushit')
             v = virushits[0]  # first virus hit
@@ -2509,8 +2260,8 @@ def getHitsForDiagram(omitInReference = True):
             allVirusHits[seqid][specimen].addHit(hit, overlap, primary, referenceOverlaps)
     return allVirusHits, allSpecimens
 
-def drawFamily(families, famACCs, separatePops, showAaegL5_hits, showPlot, small, omitInReference):
-    allVirusHits, allSpecimens = getHitsForDiagram(omitInReference)
+def drawFamily(families, famACCs, separatePops, showAaegL5_hits, showPlot, small):
+    allVirusHits, allSpecimens = getHitsForDiagram()
         
     if famACCs is None:
         fams = readFamFile()
@@ -2531,7 +2282,7 @@ def drawFamily(families, famACCs, separatePops, showAaegL5_hits, showPlot, small
             if not Path(GB_DIR + acc + '.gb').exists():
                 if not getGenBank(acc):
                     continue
-            virusRecord = SeqIO.read('/home/havill/data/aegypti/gb/' + acc + '.gb', 'gb')  # SeqRecord
+            virusRecord = SeqIO.read(GB_DIR + acc + '.gb', 'gb')  # SeqRecord
             minCDSPos = math.inf
             for feature in virusRecord.features:
                 if feature.type == 'CDS':
@@ -2546,12 +2297,12 @@ def drawFamily(families, famACCs, separatePops, showAaegL5_hits, showPlot, small
                 allVirusHits[acc][specimen].adjust(startPositions[repACC] - startPositions[acc])
                 famHits[specimen].addHits(allVirusHits[acc][specimen].getPrimaryHitsOnly())  # only primary hits so one hit per contig
                 
-        drawVirus(repACC, family, famHits, allSpecimens, separatePops, True, showAaegL5_hits, showPlot, small, omitInReference)
+        drawVirus(repACC, family, famHits, allSpecimens, separatePops, True, showAaegL5_hits, showPlot, small)
         famACCs = None
     
-def drawAll(separatePops, omitInReference):
+def drawAll(separatePops = False):
     writelog('Creating diagrams...', True)
-    allVirusHits, allSpecimens = getHitsForDiagram(omitInReference)
+    allVirusHits, allSpecimens = getHitsForDiagram()
     
     fams = readFamFile()
 
@@ -2569,82 +2320,48 @@ def drawAll(separatePops, omitInReference):
                 fam = getFamily(acc)
                 fams[acc] = fam
                 addFamily(acc, fam)
-            drawVirus(acc, fams[acc], allVirusHits[acc], allSpecimens, separatePops, False, True, True, False, omitInReference)
+            drawVirus(acc, fams[acc], allVirusHits[acc], allSpecimens, separatePops, False, True, True, False)
 
 ###############################################################################
 
-def doItAllViruses(dirName, filenameBAM, virusName, virusDB, alsoFindFeatures = True):
+def doIt(dirName, filenameBAM):
     
     filenameBAM = str(Path(dirName) / filenameBAM)
-    newFilenameFASTA = getUnmappedReads(filenameBAM)
-    newFilenameBAM = newFilenameFASTA[:-6] + '.bam'  # all unmapped plus mates
-    
-# Alternatively, blast reads first and then assemble only those that hit => shorter contigs
-#    filenameCSV = blastViral(newFilenameFASTA, virusName, virusDB)
-#    newFilenameBAM = getReads(filenameCSV, newFilenameBAM, True, virusName)  # just viral hits
-    
-    if virusName is not None:
-        writeReadsFASTQ(newFilenameBAM, virusName)
+    newFilenameBAM = getUnmappedReads(filenameBAM)
+    writeReadsFASTQ(newFilenameBAM)
 
-        success = assembleReads(dirName, virusName)  #1 = assemble
-        if success:
-            blastScaffolds(dirName, virusName, virusDB, False)  #2 = blast scaffolds
-            
-#            hitsDirName = str(Path(dirName).parent.parent / ('results/HITS_' + virusName))
-#            hitsCombinedDirName = str(Path(dirName).parent.parent / ('results/HITS_' + virusName + '_combined'))
-        
-            xmlFilename = getHits(dirName, virusName)  #3 = get hits
-            if xmlFilename is not None:
-                drawXML(xmlFilename, str(Path(xmlFilename).parent / 'diagrams'), False)
-#                 if not Path(hitsDirName).exists():
-#                     os.mkdir(hitsDirName)
-                
-                if alsoFindFeatures:
-                    global iTrees
-                    if iTrees is None:
-                        iTrees = makeIntervalTrees(str(Path(dirName).parent))
-                    xmlFeaturesFilename = findFeatures(xmlFilename, iTrees)  #4 = get features
+    success = assembleReads(dirName)  #1 = assemble
+    if success:
+        blastScaffolds(dirName, False)  #2 = blast scaffolds
     
-                    displayXML(xmlFeaturesFilename, xmlFeaturesFilename[:-4] + '.txt', True)
-                    displayXML(xmlFeaturesFilename, xmlFeaturesFilename[:-4] + '_short.txt', False)
-                    
-                    # remove any old txt files
-                    if Path(xmlFilename[:-4] + '.txt').exists():
-                        os.system('rm ' + xmlFilename[:-4] + '.txt')
-                    if Path(xmlFilename[:-4] + '_short.txt').exists():
-                        os.system('rm ' + xmlFilename[:-4] + '_short.txt')
-        
-#                     writelog('Copying hits/features to ' + hitsDirName + '...')
-#                     os.system('cp -v ' + xmlFeaturesFilename + ' ' + hitsDirName)
-                else:
-                    displayXML(xmlFilename, xmlFilename[:-4] + '.txt', True)
-                    displayXML(xmlFilename, xmlFilename[:-4] + '_short.txt', False)
-#                     writelog('Copying hits to ' + hitsDirName + '...')
-#                     os.system('cp -v ' + xmlFilename + ' ' + hitsDirName)
+        xmlFilename = getHits(dirName)  #3 = get hits
+        if xmlFilename is not None:
+            drawXML(xmlFilename)
+            
+            if FIND_FEATURES:
+                makeIntervalTrees()
+                xmlFeaturesFilename = findFeaturesXML(xmlFilename)  #4 = get features
+                displayXML(xmlFeaturesFilename, True)
+                displayXML(xmlFeaturesFilename, False)
+                
+                # remove any old txt files
+                if Path(xmlFilename[:-4] + '.txt').exists():
+                    os.system('rm ' + xmlFilename[:-4] + '.txt')
+                if Path(xmlFilename[:-4] + '_short.txt').exists():
+                    os.system('rm ' + xmlFilename[:-4] + '_short.txt')
             else:
-                writelog('*** ' + str(Path(dirName).name) + ': no results found. ***', True)
+                displayXML(xmlFilename, True)
+                displayXML(xmlFilename, False)
         else:
-            writelog('*** ' + str(Path(dirName).name) + ': assembly failed; no results found. ***', True)
+            writelog('*** ' + str(Path(dirName).name) + ': no results found. ***', True)
+    else:
+        writelog('*** ' + str(Path(dirName).name) + ': assembly failed; no results found. ***', True)
         
     writelog('*** ' + str(Path(dirName).name) + ' done. ***', True)
 
 def doAll():
-    dirList = [dir for dir in Path(ROOT_DIR).iterdir() if dir.is_dir() and 'combined' not in dir.name]
-#    dirList = ['Amacuzac-Mexico-10.LIN210A1625', 'Bangkok_Thailand_10.LIN210A1688']
-#    dirList = ['La_Lope-Gabon-10.LIN210A1646']
-#    dirList = ['Tahiti_FrenchPolynesia_10.LIN210A1708']
-#    dirList = [Path(ROOT_DIR + 'El_Dorado_Argentina_U_8.LIN210A2746')]
-#    dirList = [Path(ROOT_DIR + 'Bangkok_Thailand_03.LIN210A1681')]
-
-# import datetime
-#     dirListNew = []
-#     for dir in dirList:
-#         dt = datetime.datetime.fromtimestamp(os.path.getmtime(str(dir / ('spades_all/' + dir.name + '_all_hits_features.xml'))))
-#         if dt.day >= 12 and dt.hour >= 8:
-#             continue
-#         else:
-#             dirListNew.append(dir)
-#     dirList = dirListNew
+    dirList = [dir for dir in Path(SPECIMENS_DIR).iterdir() if dir.is_dir() and 'combined' not in dir.name]
+    dirList = [Path('/Volumes/Data2/specimens/Bangkok_Thailand_01.LIN210A1679/')]
     
     count = 0
     dirList.sort()
@@ -2653,75 +2370,63 @@ def doAll():
             if not file.is_dir() and (file.name[-26:] == '.sorted.deduped.merged.bam'):
                 count += 1
                 writelog('\n' + str(count) + '/' + str(len(dirList)) + ': ' + dir.name, True)
-                doItAllViruses(str(dir.resolve()), file.name, 'all', 'virusdb', True)
+                doIt(str(dir.resolve()), file.name)
                 break
                     
-def doAllParallel2():
-    dirList = [dir for dir in Path(ROOT_DIR).iterdir() if dir.is_dir() and ('combined' not in dir.name)]
-    workers = []
-    count = 0
-    for dir in dirList:
-        for file in dir.iterdir():
-            if not file.is_dir() and (file.name[-26:] == '.sorted.deduped.merged.bam'):
-                p = Process(target = doItAllViruses, args = (str(dir.resolve()), file.name, 'all', 'virusdb', True))
-                workers.append(p)
-                p.start()
-                count += 1
-                
-                while count == 2:
-                    for index in range(len(workers)):
-                        p = workers[index]
-                        p.join(3)
-                        if not p.is_alive():
-                            count -= 1
-                            workers.pop(index)
-                            break
-                        
-                break
-        
-    for p in workers:
-        p.join()
-        
-    os.system('cp ' + ROOT_DIR + '/*/spades_all/*all_hits.xml ' + str(Path(ROOT).parent) + '/results/HITS_all')
-    consolidateAll(str(Path(ROOT_DIR).parent) + '/results/HITS_all', 'all')
-
-logFile = None
-
-def writelog(message, alsoPrint = False):
-    logFile.write(message + '\n')
-    if alsoPrint:
-        print(message)
+# def doAllParallel2():
+#     dirList = [dir for dir in Path(SPECIMENS_DIR).iterdir() if dir.is_dir() and ('combined' not in dir.name)]
+#     workers = []
+#     count = 0
+#     for dir in dirList:
+#         for file in dir.iterdir():
+#             if not file.is_dir() and (file.name[-26:] == '.sorted.deduped.merged.bam'):
+#                 p = Process(target = doIt, args = (str(dir.resolve()), file.name, 'virusdb', True))
+#                 workers.append(p)
+#                 p.start()
+#                 count += 1
+#                 
+#                 while count == 2:
+#                     for index in range(len(workers)):
+#                         p = workers[index]
+#                         p.join(3)
+#                         if not p.is_alive():
+#                             count -= 1
+#                             workers.pop(index)
+#                             break
+#                         
+#                 break
+#         
+#     for p in workers:
+#         p.join()
+#         
+#     os.system('cp ' + ROOT_DIR + '/*/spades_all/*hits.xml ' + str(Path(ROOT).parent) + '/results/HITS_all')
+#     consolidateAll(str(Path(ROOT_DIR).parent) + '/results/HITS_all', 'all')
 
 def main():
-    global logFile
-    
     if Path(RESULTS_DIR).exists():
         answer = ' '
         while answer not in 'yYnN':
-            answer = input('Results directory exists.  Overwrite (y/n)? ')
+            answer = input('Results directory ' + RESULTS_DIR + ' exists.  OK to overwrite (y/n)? ')
         if answer[0] not in 'yY':
             writelog('OK, quitting.', True)
             return 1
     else:
         os.system('mkdir ' + RESULTS_DIR)
         
-    logFile = open(LOGFILE_PATH, 'a')
-        
     writelog('\n************************************************')
     writelog('Starting pipeline at ' + time.strftime('%c'))
     
     doAll()
 
-    if copyResults():
-        consolidateAll('all', True, True)
-        drawAll(False, False)
-#        drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)
+    consolidateAll()
+    drawAll(False)
+#    drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)
     
-#main()
+main()
 #doAll()
-xmlFilename = '/Volumes/Data/aegypti/analyzed/Bangkok_Thailand_01.LIN210A1679/spades_all/Bangkok_Thailand_01.LIN210A1679_all_hits.xml'
-drawXML(xmlFilename, str(Path(xmlFilename).parent / 'diagrams'), False)
-#consolidateAll('all', True, True)
+#xmlFilename = '/Volumes/Data/aegypti/analyzed/Bangkok_Thailand_01.LIN210A1679/spades_all/Bangkok_Thailand_01.LIN210A1679_all_hits.xml'
+#drawXML(xmlFilename, str(Path(xmlFilename).parent / 'diagrams'), False)
+#consolidateAll(True, True)
 #xmlFilename = getHits(str(Path(ROOT_DIR + 'Cuanda_Angola_16.LIN210A1734')), 'all', 100, EVALUE_A)  #3 = get hits
-#drawAll(False, False)
+#drawAll(False)
 #drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)

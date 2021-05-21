@@ -6,11 +6,6 @@ from Bio import AlignIO
 from Bio.Align import MultipleSeqAlignment
 
 from util import *
-
-MIN_K = 2
-MAX_K = 12
-KMEANS_TRIALS = 10
-MAX_KMEANS_ITERATIONS = 100
     
 def distance(p, q):  # identities
     return np.count_nonzero(p - q)  # same as len(p) - np.count_nonzero((p - q) == 0)
@@ -195,35 +190,11 @@ def findClusters(fileName):
             
     realK = sum([1 for cluster in clusters if len(cluster) > 0])
             
-#     epsilon = 0.01
-#     for k in range(MIN_K, MAX_K + 1):
-#         if silhouettes[k][0][0] >= maxSV - epsilon:
-#             bestSV = silhouettes[k][0][0]
-#             bestK = k
-#             clusters = silhouettes[k][0][1]
-#             break
-    
-#    sv, bestK, clusters = max(silhouettes)
-
     if realK == bestK:
         print('\n  Best k = ' + str(bestK) + ' clusters have silhouette value = ' + '{0:6.4f}'.format(maxSV) + '.\n')
     else:
         print('\n  Best k = ' + str(realK) + ' (' + str(bestK) + ' minus ' + str(bestK - realK) + ' empty) clusters have silhouette value = ' + '{0:6.4f}'.format(maxSV) + '.\n')
 
-#     bestClusters = {bestK: clusters}
-#     triples = [(sv, k, clusters) for (sv, k, clusters) in silhouettes if k == bestK - 1]
-#     if len(triples) >= 1:
-#         bestClusters[bestK - 1] = max(triples)[2]
-#         print(' Best k-1 = ' + str(bestK - 1) + ' clusters have silouette value = ' + str(max(triples)[0]))
-#     triples = [(sv, k, clusters) for (sv, k, clusters) in silhouettes if k == bestK + 1]
-#     if len(triples) >= 1:
-#         bestClusters[bestK + 1] = max(triples)[2]
-#         print(' Best k+1 = ' + str(bestK + 1) + ' clusters have silouette value = ' + str(max(triples)[0]))
-#     
-#     for k in [bestK, bestK - 1, bestK + 1]:
-#         if k not in bestClusters:
-#             continue
-#        clusters = bestClusters[k]
     records = [aln[0]]
     clusters.sort(key = lambda c: len(c), reverse = True)  # start with largest cluster
     centroids = [centroid(cluster, data, []) for cluster in clusters if len(cluster) > 0]

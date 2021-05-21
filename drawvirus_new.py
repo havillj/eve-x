@@ -375,13 +375,13 @@ drawEVEs(CFAV_EVEs, 'NC_001564.2', 'CFAV EVEs', openEnds)
 def getHits1(virusACC):
     dir = Path(RESULTS_DIR + 'specimens/')
     subdirs = [d for d in dir.iterdir()]
-    files = [d / ('xml/' + d.name + '_all_hits_features.xml') for d in subdirs ]
+    files = [d / ('xml/' + d.name + '_hits.xml') for d in subdirs ]
     files.sort()
 
     virusHits = {}
     allSpecimens = []
     for file in files:
-        specimen = file.name.rstrip('_all_hits_features.xml')
+        specimen = file.name.rstrip('_hits.xml')
         print(specimen)
         allSpecimens.append(specimen)
         tree = ET.parse(str(file))
@@ -497,7 +497,7 @@ def getVirusSequences2(virusACC, vStart, vEnd, flankLength, outFileName, sort = 
     outFile = open(outFileName + '.fasta', 'w')
     outFile2 = open(outFileName + '.csv', 'w')
     for subdir in subdirs:
-        fileName = str(subdir / ('xml/' + subdir.name + '_all_hits_features.xml'))
+        fileName = str(subdir / ('xml/' + subdir.name + '_hits.xml'))
         specimen = str(subdir.name)
         scaffoldsFileName = str(subdir / ('scaffolds/scaffolds.fasta'))
         scaffoldRecords = SeqIO.index(scaffoldsFileName, 'fasta')
