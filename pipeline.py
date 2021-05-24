@@ -357,7 +357,6 @@ def getHits(dirName): #, maxFlankingHits):
                 leftIndex = index
                 hitLength = abs(int(virusHit[QEND]) - int(virusHit[QSTART])) + 1
                 hitSeq = virusHit[QSEQ]
-#                hitLength = len(virusHit[2])
                 pident = float(virusHit[PIDENT])
             rightIndex = index
             sseqid = nextSeqID
@@ -483,8 +482,6 @@ def getHits(dirName): #, maxFlankingHits):
                     aedes_qseq = aedesHit[A_QSEQ]
                     aedes_qstart = int(aedesHit[A_QSTART])
                     aedes_qend = int(aedesHit[A_QEND])
-#                    if (virus_qstart - aedes_qend > MIN_FLANKING_QSTART) and (aedes_qstart - virus_qend > MIN_FLANKING_QSTART) and (len(aedes_qseq) < MIN_FLANKING_HIT_LENGTH):
-#                    if (aedes_qstart > MIN_FLANKING_QSTART) and (aedes_qend < contigLength - MIN_FLANKING_QSTART) and (len(aedes_qseq) < MIN_FLANKING_HIT_LENGTH):
                     if ((virus_qstart - aedes_qend > MIN_FLANKING_DISTANCE) or (aedes_qstart - virus_qend > MIN_FLANKING_DISTANCE)) and (len(aedes_qseq) < MIN_FLANKING_HIT_LENGTH):
                         writelog(contig + ': discarded distant Aedes hit with length ' + str(len(aedes_qseq)) + ' < ' + str(MIN_FLANKING_HIT_LENGTH))
                         continue
@@ -494,30 +491,12 @@ def getHits(dirName): #, maxFlankingHits):
                         continue
     
                     virusIntervalsNotInRef.chop(aedes_qstart, aedes_qend)  # detect overlap with virus hit
-#                    writelog('chopped', aedes_qstart, aedes_qend)
-#                     aedes_chr = aedesHit[A_SEQID]
-#                     aedes_sstart = int(aedesHit[A_SSTART])
-#                     aedes_send = int(aedesHit[A_SEND])
                     if aedes_qstart < virus_qstart and aedes_qend < virus_qend:
                         before.append(index)
                     elif aedes_qstart > virus_qstart and aedes_qend > virus_qend:
                         after.append(index)
                     else:  # as >= vs and ae <= ve or as <= vs and ae >= ve
                         overlap.append(index)  # aedes hit completely overlaps or is contained in virus hit
-
-#                     if aedes_qend < virus_qstart + ALLOWED_OVERLAP:
-#                         before.append(index)
-#                     elif aedes_qstart > virus_qend - ALLOWED_OVERLAP:
-#                         after.append(index)
-#                     else:
-#                         overlap.append(index)
-
-#                     if aedes_qend < virus_qstart + ALLOWED_OVERLAP:
-#                         before.append((index, aedes_sstart, aedes_send, aedes_chr))
-#                     elif aedes_qstart > virus_qend - ALLOWED_OVERLAP:
-#                         after.append((index, aedes_sstart, aedes_send, aedes_chr))
-#                     else:
-#                         overlap.append((index, aedes_sstart, aedes_send, aedes_chr))
 
                 doesOverlap = sum([iv.length() for iv in virusIntervalsNotInRef]) <= (1 - OVERLAP_FRACTION) * virusIntervalsLength
                                         
@@ -544,12 +523,6 @@ def getHits(dirName): #, maxFlankingHits):
                         else:
                             virusIntervalsInRef2.addi(iv[0], iv[1], (iv.data[0] - (iv[0] - iv2[0]), iv.data[1] + (iv2[1] - iv[1])))
                             
-#             writelog(contigName, virusHit[SEQID])
-#             writelog(virusIntervals)
-#             writelog(choppedIntervals)
-#             writelog(virusIntervalsInRef)
-#             writelog(virusIntervalsInRef2)
-
             contigTree.attrib['referenceoverlaps'] = str([iv.data for iv in virusIntervalsInRef2])
                                         
             for indices, name in [(before, 'vectorhitleft'), (after, 'vectorhitright'), (overlap, 'vectorhitoverlap')]:
@@ -565,30 +538,6 @@ def getHits(dirName): #, maxFlankingHits):
                     ET.SubElement(aedesElement, 'evalue').text = aedesHit[A_EVALUE]
                     ET.SubElement(aedesElement, 'bitscore').text = aedesHit[A_BITSCORE]
                     
-#             for b in before:
-#                 beforeHit = aedesHits[contig][b[0]]
-#                 aedesElement = ET.SubElement(contigTree, 'vectorhitleft', {'id': str(b[0]), 'seqid': beforeHit[3]})
-#                 ET.SubElement(aedesElement, 'qstart').text = beforeHit[0]
-#                 ET.SubElement(aedesElement, 'qend').text = beforeHit[1]
-#                 ET.SubElement(aedesElement, 'qseq').text = beforeHit[2]
-#                 ET.SubElement(aedesElement, 'sstart').text = beforeHit[4]
-#                 ET.SubElement(aedesElement, 'send').text = beforeHit[5]
-#                 ET.SubElement(aedesElement, 'sseq').text = beforeHit[6]
-#                 ET.SubElement(aedesElement, 'evalue').text = beforeHit[7]
-#                 ET.SubElement(aedesElement, 'bitscore').text = beforeHit[8]
-#             if len(after) > 0:
-#                 for a in after:
-#                     afterHit = aedesHits[contig][a[0]]
-#                     aedesElement = ET.SubElement(contigTree, 'vectorhitright', {'id': str(a[0]), 'seqid': afterHit[3]})
-#                     ET.SubElement(aedesElement, 'qstart').text = afterHit[0]
-#                     ET.SubElement(aedesElement, 'qend').text = afterHit[1]
-#                     ET.SubElement(aedesElement, 'qseq').text = afterHit[2]
-#                     ET.SubElement(aedesElement, 'sstart').text = afterHit[4]
-#                     ET.SubElement(aedesElement, 'send').text = afterHit[5]
-#                     ET.SubElement(aedesElement, 'sseq').text = afterHit[6]
-#                     ET.SubElement(aedesElement, 'evalue').text = afterHit[7]
-#                     ET.SubElement(aedesElement, 'bitscore').text = afterHit[8]
-
             matchingFlanks = ET.SubElement(contigTree, 'flanks')
             # find pairs of before/after aedes hits that are on the same strand and within 10Kbp of each other
             for b in before:
@@ -607,20 +556,9 @@ def getHits(dirName): #, maxFlankingHits):
                                 ET.SubElement(matchingFlanks, 'match', {'leftid': str(b), 'rightid': str(a)})
                             else:
                                 ET.SubElement(matchingFlanks, 'inversion', {'leftid': str(b), 'rightid': str(a)})
-
-#             for b in before:
-#                 for a in after:
-#                     if b[3] == a[3]:  # same chr
-#                         if ((b[1] < b[2] < a[1] + 20 < a[2] + 20) or (b[1] > b[2] > a[1] + 20 > a[2] + 20)) and (abs(b[2] - a[1]) < 10000):
-#                             ET.SubElement(matchingFlanks, 'match', {'leftid': str(b[0]), 'rightid': str(a[0])})
-
      
     tree.write(xmlFilename, xml_declaration=True, pretty_print=True)
-    
-#     writelog(set(all_viral_hits))
-#     for a in set(all_viral_hits):
-#         writelog(a[0], a[1])
-    
+        
     return xmlFilename
 
 ###############################################################################
@@ -657,12 +595,8 @@ def displayXML(fileName, displaySeq = True):
         outFile.write('Contig: ' + contig.attrib['name'] + '\n')
         outFile.write('   Viral hit: \n')
         for v in contig.findall('virushit'):
-#            if displaySeq:
             outFile.write('      contig         {0:>5} - {1:<5} {2}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
             outFile.write('      {3:<14} {0:>5} - {1:<5} {2}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid']))
-#             else:
-#                 outFile.write('      contig         {0:>5} - {1:<5}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
-#                 outFile.write('      {3:<14} {0:>5} - {1:<5}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid']))
 
         if displaySeq:
             hitsLeft = contig.findall('vectorhitleft')
@@ -673,7 +607,6 @@ def displayXML(fileName, displaySeq = True):
                     hitsDict = {}  # consolidate query hit: [subject hits]
                     for v in hits:
                         pos = (v.find('qstart').text, v.find('qend').text)
-#                        pos = (v.find('qstart').text, v.find('qend').text, v.find('qseq').text)
                         features = v.findall('feature')
                         featureString = '| '
                         for f in features:
@@ -681,19 +614,15 @@ def displayXML(fileName, displaySeq = True):
 
                         if pos not in hitsDict:
                             hitsDict[pos] = [(v.find('sstart').text, v.find('send').text, v.attrib['seqid'], featureString)]
-#                            hitsDict[pos] = [(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString)]
                         else:
                             hitsDict[pos].append((v.find('sstart').text, v.find('send').text, v.attrib['seqid'], featureString))
-#                            hitsDict[pos].append((v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
                     outFile.write('   Vector hits ' + locString + ': \n')
                     posSort = list(hitsDict.keys())
                     posSort.sort(key = lambda pos: (int(pos[0]), int(pos[1])))
                     for q in posSort:
                         outFile.write('      contig         {0:>9} - {1:<9}\n'.format(*q))
-#                        outFile.write('      contig         {0:>9} - {1:<9} {2}\n'.format(*q))
                         for s in hitsDict[q]:
                             outFile.write('      {2:<14} {0:>9} - {1:<9} {3}\n'.format(*s))
-#                            outFile.write('      {3:<14} {0:>9} - {1:<9} {2} {4}\n'.format(*s))
                         outFile.write('\n')
 
             flanks = contig.find('flanks')
@@ -708,49 +637,23 @@ def displayXML(fileName, displaySeq = True):
                                 features = v.findall('feature')
                                 featureString = '| '
                                 for f in features:
-    #                                 if displaySeq:
                                     featureString += f.attrib['type'] + '; ' + f.find('id').text + '; ' + f.find('location').text + ' | '
-    #                                 else:
-    #                                     featureString += f.attrib['type'] + '; ' + f.find('id').text + ' | '
-    #                             if displaySeq:
                                 outFile.write('         contig         {0:>9} - {1:<9}\n'.format(v.find('qstart').text, v.find('qend').text))
                                 outFile.write('         {2:<14} {0:>9} - {1:<9} {3}\n\n'.format(v.find('sstart').text, v.find('send').text, v.attrib['seqid'], featureString))
-    #                            outFile.write('         contig         {0:>9} - {1:<9} {2}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
-    #                            outFile.write('         {3:<14} {0:>9} - {1:<9} {2} {4}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
-
-    #                             else:
-    #                                 outFile.write('         contig         {0:>9} - {1:<9}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
-    #                                 outFile.write('         {3:<14} {0:>9} - {1:<9} {4}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
                                 break
                         
                         for v in contig.findall('virushit'):
-    #                         if displaySeq:
                             outFile.write('         contig         {0:>9} - {1:<9} {2}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
                             outFile.write('         {3:<14} {0:>9} - {1:<9} {2}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid']))
-
-    #                         else:
-    #                             outFile.write('         contig         {0:>9} - {1:<9}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
-    #                             outFile.write('         {3:<14} {0:>9} - {1:<9}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid']))
 
                         for v in hitsRight:
                             if v.attrib['id'] == match.attrib['rightid']:
                                 features = v.findall('feature')
                                 featureString = '| '
                                 for f in features:
-    #                                 if displaySeq:
                                     featureString += f.attrib['type'] + '; ' + f.find('id').text + '; ' + f.find('location').text + ' | '
-    #                                 else:
-    #                                     featureString += f.attrib['type'] + '; ' + f.find('id').text + ' | '
-
-    #                             if displaySeq:
                                 outFile.write('         contig         {0:>9} - {1:<9}\n'.format(v.find('qstart').text, v.find('qend').text))
                                 outFile.write('         {2:<14} {0:>9} - {1:<9} {3}\n\n'.format(v.find('sstart').text, v.find('send').text, v.attrib['seqid'], featureString))
-    #                            outFile.write('         contig         {0:>9} - {1:<9} {2}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
-    #                            outFile.write('         {3:<14} {0:>9} - {1:<9} {2} {4}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
-
-    #                             else:
-    #                                 outFile.write('         contig         {0:>9} - {1:<9}\n'.format(v.find('qstart').text, v.find('qend').text, v.find('qseq').text))
-    #                                 outFile.write('         {3:<14} {0:>9} - {1:<9} {4}\n\n'.format(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'], featureString))
                                 break
                         counter += 1
         
@@ -832,7 +735,6 @@ def drawXML(fileName):
             contigFeaturesV[c] = []
             contigFeaturesA[c] = []
             
-#        writelog(contig.attrib['name'])
         p = re.compile(r'length_(.*)_cov')
         m = p.search(contig.attrib['name'])
         contigLength = int(m.group(1))
@@ -862,12 +764,8 @@ def drawXML(fileName):
                     addFamily(seqid, fam)
                 family = fams[seqid]
                 
-#            if v.attrib['minevalue'] == 'True':
-#            if v.attrib['maxbitscore'] == 'True':
             stitle += ' (' + str(seqid) + ')'
-            if not BEST_HITS_ONLY and (contig.attrib['besthit'] == 'True'):
-#                stitle = '**' + stitle.lstrip('|') + '**'
-                
+            if not BEST_HITS_ONLY and (contig.attrib['besthit'] == 'True'):                
                 if seqid not in fams:
                     fam = getFamily(seqid)
                     fams[seqid] = fam
@@ -960,27 +858,15 @@ def drawXML(fileName):
                 hitsDict = {}  # consolidate query hit: [subject hits]
                 for v in hits:
                     pos = (v.find('qstart').text, v.find('qend').text)
-#                    pos = (v.find('qstart').text, v.find('qend').text, v.find('qseq').text)
                     for x in range(int(pos[0]), int(pos[1])):
                         aaCoverage[x] += 1
                     if v.attrib['id'] in hitsDone:
                         continue
-#                    featureString = '| '
-#                     features = v.findall('feature')
-#                     for f in features:
-#                         featLocation = f.find('location').text
-#                         p = re.compile(r'\[(\d*):(\d*)\]')
-#                         m = p.search(featLocation)
-#                         featStart, featEnd = int(m.group(1)), int(m.group(2))
-#                         featID = f.find('id').text
-#                         featType = f.attrib['type']
                         
                     if pos not in hitsDict:
                         hitsDict[pos] = [(v.find('sstart').text, v.find('send').text, v.attrib['seqid'])] #, featureString)]
-#                        hitsDict[pos] = [(v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'])] #, featureString)]
                     else:
                         hitsDict[pos].append((v.find('sstart').text, v.find('send').text, v.attrib['seqid'])) #, featureString))
-#                        hitsDict[pos].append((v.find('sstart').text, v.find('send').text, v.find('sseq').text, v.attrib['seqid'])) #, featureString))
                 posSort = list(hitsDict.keys())
                 if hits != hitsRight:
                     posSort.sort(key = lambda pos: int(pos[1]), reverse = True)  # closest first
@@ -993,7 +879,6 @@ def drawXML(fileName):
                         strand = 1
                     else:
                         strand = -1
-    #                for s in hitsDict[q]:
                     s = hitsDict[q][0]
                     sstart = int(s[0])
                     send = int(s[1])
@@ -1002,8 +887,6 @@ def drawXML(fileName):
                     else:
                         strandStr = '-'
                     seqid = s[2]
-#                     if len(hitsDict[q]) > 1:
-#                         send += '*'
                     if seqid in chromNames:
                         seqid = chromNames[seqid]
                     elif seqid[:8] == 'NW_01873':
@@ -1022,7 +905,6 @@ def drawXML(fileName):
         
         record.plot(max_label_length = 80, ax = ax1, with_ruler = False)
         ax2.fill_between(range(contigLength), aaCoverage, step = 'mid', alpha = 0.3)
-#        ax2.scatter(range(contigLength), aaCoverage)
         ax2.tick_params(axis='both', which='major', labelsize=axesFontSize)
         ax2.set_ylim(bottom = 0, top = max(aaCoverage + [1]))
         ax2.set_yticks([0, max(aaCoverage + [1]) // 2, max(aaCoverage + [1])])
@@ -1035,12 +917,10 @@ def drawXML(fileName):
             pp = PdfPages(str(Path(familyDir) / (contig.attrib['name'] + '_BEST-HIT.pdf')))
             pp.savefig(fig)
             pp.close()
-#            fig.savefig(Path(familyDir) / (contig.attrib['name'] + '_BEST-HIT.pdf'))
         else:
             pp = PdfPages(str(Path(familyDir) / (contig.attrib['name'] + '.pdf')))
             pp.savefig(fig)
             pp.close()
-#            fig.savefig(Path(familyDir) / (contig.attrib['name'] + '.pdf'))
         pyplot.close(fig)
         
     if not BEST_HITS_ONLY:
@@ -1048,45 +928,12 @@ def drawXML(fileName):
             record = GraphicRecord(sequence_length = contigLengths[c], features = contigFeaturesV[c])
         
             ax, _ = record.plot(max_label_length = 80, figure_width = 10)
-    #        ax2.fill_between(range(contigLength), aaCoverage, step = 'mid', alpha = 0.3)
-    #        ax2.set_ylim(bottom = 0)
-    #        ax2.set_ylabel('Aa hits')
-
             familyDir = str(diagramsPath / families[c])
             pp = PdfPages(str(Path(familyDir) / (c + '_all-viral-hits.pdf')))
             pp.savefig(ax.figure)
             pp.close()
             pyplot.close(ax.figure)
                     
-###############################################################################
-
-# def copyResults():    
-#     SPECIMENS_DIR = RESULTS_DIR + 'specimens/'
-#     if not Path(SPECIMENS_DIR).exists():
-#         os.system('mkdir ' + SPECIMENS_DIR)
-#         
-#     dirList = [dir for dir in Path(ROOT_DIR).iterdir() if dir.is_dir() and 'combined' not in dir.name]
-#     count = 0
-#     for dir in dirList:
-#         count += 1
-#         writelog('Copying results from ' + dir.name + ' (' + str(count) + '/' + str(len(dirList)) + ')', True)
-#         if not Path(SPECIMENS_DIR + dir.name).exists():
-#             os.system('mkdir ' + SPECIMENS_DIR + dir.name)
-#             os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/xml')
-#             os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/txt')
-# #            os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/sequences')
-#             os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/scaffolds')
-#             os.system('mkdir ' + SPECIMENS_DIR + dir.name + '/diagrams')
-#         
-#         os.system('cp ' + str(dir / 'spades') + '/*_hits*.xml ' + SPECIMENS_DIR + dir.name + '/xml')
-#         os.system('cp ' + str(dir / 'spades') + '/*_hits*.txt ' + SPECIMENS_DIR + dir.name + '/txt')
-#         os.system('cp ' + str(dir / 'spades') + '/scaffolds.fasta ' + SPECIMENS_DIR + dir.name + '/scaffolds')
-#         os.system('cp ' + str(dir / 'spades') + '/blast_scaffolds.csv ' + SPECIMENS_DIR + dir.name + '/scaffolds')
-#         os.system('cp -r ' + str(dir / 'spades') + '/diagrams/* ' + SPECIMENS_DIR + dir.name + '/diagrams')
-# #        os.system('cp ' + ROOT + '/../results/HITS_all/' + dir.name + '_all_hits.fasta ' + SPECIMENS_DIR + dir.name + '/sequences')
-#         
-#     return True
-
 ###############################################################################
 
 def reverseComplement(dna):
@@ -1098,239 +945,6 @@ def reverseComplement(dna):
 	for base in reversed(dna):
 		complement = complement + basecomplement.get(base, base)
 	return complement
-
-# def drawInsertSites(insertSites, seqid, stitle, familyDir):
-#     lengths = {'NC_035107.1': 310827022, 'NC_035108.1': 474425716, 'NC_035109.1': 409777670}
-#     chromNumber = {'NC_035107.1': 1, 'NC_035108.1': 2, 'NC_035109.1': 3}
-#     
-#     y = 0
-#     yvalues = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-#     xvalues = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-#     ylabels  = []
-#     colors = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-#     sortedSpecimens = list(insertSites[(seqid, stitle)].keys())
-#     specimenLabels = {}
-#     for specimen in sortedSpecimens:
-#         specimenLabels[specimen] = getSpecimenLabel(specimen)
-#     sortedSpecimens.sort(key=lambda s: specimenLabels[s], reverse=True)
-#     for specimen in sortedSpecimens:
-#         for contig in insertSites[(seqid, stitle)][specimen]:
-#             for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['left']:
-#                 if chromID in lengths:
-#                     yvalues[chromID].append(y)
-#                     xvalues[chromID].append(position)
-#                     colors[chromID].append('#929000')
-#             for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['right']:
-#                 if chromID in lengths:
-#                     yvalues[chromID].append(y)
-#                     xvalues[chromID].append(position)
-#                     colors[chromID].append('#ff2600')
-#             for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['match']:
-#                 if chromID in lengths:
-#                     yvalues[chromID].append(y)
-#                     xvalues[chromID].append(position[0])
-#                     colors[chromID].append('#ff40ff')
-#             for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['inversion']:
-#                 if chromID in lengths:
-#                     yvalues[chromID].append(y)
-#                     xvalues[chromID].append(position[0])
-#                     colors[chromID].append('#5e5e5e')
-#             y += 1
-#             region, num = specimenLabels[specimen]
-#             ylabels.append(region + ' ' + str(num) + ' ' + contig)
-#             
-#     for chromID in yvalues:
-#         fig = pyplot.figure(figsize=(7, 10))
-#         pyplot.scatter(xvalues[chromID], yvalues[chromID], color=colors[chromID], s = 1)
-#         pyplot.tick_params(labelsize = 3)
-#         pyplot.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99)
-#         pyplot.yticks(range(y), ylabels)
-#         pyplot.xticks(range(int(1e8), lengths[chromID], int(1e8)), [str(x)+'M' for x in range(100, lengths[chromID] // int(1e6), 100)])
-#         fig.suptitle('EVE insertion positions for ' + seqid + ' in chromosome ' + str(chromNumber[chromID]), fontsize = 6, fontweight = 'bold', y = 0.98)
-#         
-#         pp = PdfPages(familyDir + '/insertpositions_' + seqid + '_chr' + str(chromNumber[chromID]) + '.pdf')
-#         pp.savefig(fig)
-#         pp.close()
-# #        pyplot.savefig('insertpositions_' + seqid + '.pdf')
-#         pyplot.close(fig)
-        
-# def drawInsertSites(clusteredFileName, insertSites, seqid, stitle, specimen2Label, familyDir):
-#     lengths = {'NC_035107.1': 310827022, 'NC_035108.1': 474425716, 'NC_035109.1': 409777670}
-#     chromNumber = {'NC_035107.1': 1, 'NC_035108.1': 2, 'NC_035109.1': 3}
-#     
-#     aln = AlignIO.read(clusteredFileName, 'fasta') # Bio.Align.MultipleSeqAlignment object
-#     
-#     y = 0
-#     yvalues = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-#     xvalues = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-#     ylabels  = []
-#     colors = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-#     positions = {} # {'NC_035107.1': {}, 'NC_035108.1': {}, 'NC_035109.1': {}}
-#         
-#     for i in range(1, len(aln)):
-#         desc = aln[i].description
-#         parts = desc.split('_|_')
-#         cluster = parts[0]
-#         specimen = parts[1]
-#         contig = parts[2]
-#         
-#         region, num = specimen2Label[specimen]
-#         ylabels.append(cluster + ' ' + region + ' ' + str(num) + ' ' + contig)
-#         
-#         if cluster not in yvalues:
-#             yvalues[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-#             xvalues[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-#             colors[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-#             positions[cluster] = {'NC_035107.1': {}, 'NC_035108.1': {}, 'NC_035109.1': {}}
-# #            ylabels[cluster] = []
-# #            y[cluster] = 0
-#         
-#         for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['left']:
-#             if chromID in lengths:
-#                 yvalues[cluster][chromID].append(y)
-#                 xvalues[cluster][chromID].append(position)
-#                 colors[cluster][chromID].append('#929000')
-#                 if position not in positions[cluster][chromID]:
-#                     positions[cluster][chromID][position] = []
-#                 positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'left'))
-#         for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['right']:
-#             if chromID in lengths:
-#                 yvalues[cluster][chromID].append(y)
-#                 xvalues[cluster][chromID].append(position)
-#                 colors[cluster][chromID].append('#ff2600')
-#                 if position not in positions[cluster][chromID]:
-#                     positions[cluster][chromID][position] = []
-#                 positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'right'))
-#         for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['match']:
-#             if chromID in lengths:
-#                 if position[0] > position[1]:
-#                     position = position[::-1]
-#                 yvalues[cluster][chromID].append(y)
-#                 xvalues[cluster][chromID].append(position[0])
-#                 colors[cluster][chromID].append('#ff40ff')
-#                 if position not in positions[cluster][chromID]:
-#                     positions[cluster][chromID][position] = []
-#                 positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'match'))
-#         for chromID, position in insertSites[(seqid, stitle)][specimen][contig]['inversion']:
-#             if chromID in lengths:
-#                 if position[0] > position[1]:
-#                     position = position[::-1]
-#                 yvalues[cluster][chromID].append(y)
-#                 xvalues[cluster][chromID].append(position[0])
-#                 colors[cluster][chromID].append('#5e5e5e')
-#                 if position not in positions[cluster][chromID]:
-#                     positions[cluster][chromID][position] = []
-#                 positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'inversion'))
-#         y += 1
-#         
-#     fig, ax = pyplot.subplots(1, 3, sharey = True, figsize = (7, 10), gridspec_kw = {'width_ratios': [1, lengths['NC_035108.1']/lengths['NC_035107.1'], lengths['NC_035109.1']/lengths['NC_035107.1']]})
-#     fig.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99, wspace = 0.0)
-#     ax[0].set_yticks(range(len(aln) - 1))
-#     ax[0].set_yticklabels(ylabels)
-#     ax[0].set_ylim(0, len(aln) - 1)
-#     ax[0].invert_yaxis()
-#     chrCount = 0
-#     xtickPositions = [[0, int(1e8), int(2e8), int(3e8)], [0, int(1e8), int(2e8), int(3e8), int(4e8)], [0, int(1e8), int(2e8), int(3e8), int(4e8)]]
-#     xtickLabels = [['', '100M', '200M', '300M'], ['', '100M', '200M', '300M', '400M'], ['', '100M', '200M', '300M', '400M']]
-#     for chromID in lengths:
-#         for cluster in yvalues:
-#             ax[chrCount].scatter(xvalues[cluster][chromID], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
-#         ax[chrCount].tick_params(labelsize = 3)
-#         if chrCount > 0:
-#             ax[chrCount].tick_params(left=False)
-#         #pyplot.axvline(x = lengths['NC_035107.1'], linewidth=0.5, color='black')
-#         #pyplot.axvline(x = lengths['NC_035107.1'] + lengths['NC_035108.1'], linewidth=0.5, color='black')
-#         #pyplot.xticks(range(int(1e8), sum(lengths.values()), int(1e8)), [str(x)+'M' for x in range(100, lengths['NC_035107.1'] // int(1e6), 100)])
-#         ax[chrCount].set_xticks(xtickPositions[chrCount])
-#         ax[chrCount].set_xticklabels(xtickLabels[chrCount])
-#         ax[chrCount].set_xlim(0, lengths[chromID])
-#         ax[chrCount].set_xlabel('Chromosome ' + str(chrCount + 1), fontsize=4)
-#         chrCount += 1
-# 
-# #     fig = pyplot.figure(figsize=(7, 10))
-# #     xoffset = 0
-# #     for chromID in lengths:
-# #         for cluster in yvalues:
-# #             pyplot.scatter([x + xoffset for x in xvalues[cluster][chromID]], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
-# #         xoffset += lengths[chromID]
-# #             
-# #     pyplot.tick_params(labelsize = 3)
-# #     pyplot.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99)
-# #     pyplot.yticks(range(len(aln) - 1), ylabels)
-# #     pyplot.gca().invert_yaxis()
-# #     pyplot.axvline(x = lengths['NC_035107.1'], linewidth=0.5, color='black')
-# #     pyplot.axvline(x = lengths['NC_035107.1'] + lengths['NC_035108.1'], linewidth=0.5, color='black')
-# #     #pyplot.xticks(range(int(1e8), sum(lengths.values()), int(1e8)), [str(x)+'M' for x in range(100, lengths['NC_035107.1'] // int(1e6), 100)])
-# #     xtickPositions = [0, int(1e8), int(2e8), int(3e8), lengths['NC_035107.1']+int(1e8), lengths['NC_035107.1']+int(2e8), lengths['NC_035107.1']+int(3e8), lengths['NC_035107.1']+int(4e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(1e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(2e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(3e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(4e8)]
-# #     xtickLabels = ['0', '100M', '200M', '300M', '100M', '200M', '300M', '400M', '100M', '200M', '300M', '400M']
-# #     pyplot.xticks(xtickPositions, xtickLabels)
-# #     pyplot.xlim(0, sum(lengths.values()))
-#     fig.suptitle('EVE insertion positions for ' + seqid, fontsize = 6, fontweight = 'bold', y = 0.98)
-# 
-#     saveFileName = familyDir + '/insertpositions_' + seqid
-#     pp = PdfPages(saveFileName + '.pdf')
-#     pp.savefig(fig)
-#     pp.close()
-#     pyplot.close(fig)
-# 
-#     for chromID in lengths:
-#         textPositionFile = open(saveFileName + '_chr' + str(chromNumber[chromID]) + '.txt', 'w')
-#         for cluster in positions:
-#             textPositionFile.write('Cluster ' + cluster[1:] + '\n')
-#             sortedPositions = list(positions[cluster][chromID].keys())
-#             sortedPositions.sort(key=lambda x: x[0] if isinstance(x, tuple) else x)
-#             for position in sortedPositions:
-#                 if len(positions[cluster][chromID][position]) >= MIN_HITS_TO_SHOW_POSITION:
-#                     textPositionFile.write(str(position) + '\t')
-#                     countsByRegion = {}
-#                     line = '\t'
-#                     for specimen, contig, type in positions[cluster][chromID][position]:
-#                         region = specimen.split('_')[0]
-#                         if region not in countsByRegion:
-#                             countsByRegion[region] = 0
-#                         countsByRegion[region] += 1
-#                         if isinstance(position, tuple):
-#                             line += specimen + ' (' + type + ')\t'   # include match/inversion if tuple
-#                         else:
-#                             line += specimen + '\t'
-#                     for region in countsByRegion:
-#                         line = ', ' + region + ': ' + str(countsByRegion[region]) + line
-#                     textPositionFile.write(line[2:] + '\n')
-#         textPositionFile.close()
-# 
-# #     textPositionFile = open(saveFileName + '.txt', 'w')
-# #     for index in range(len(aln) - 1):
-# #         textPositionFile.write(ylabels[index] + '\t')
-# #         for index2 in range(len(yvalues[cluster][chromID])):
-# #             if yvalues[cluster][chromID][index2] == index:
-# #                 textPositionFile.write(str(xvalues[cluster][chromID][index2]) + '\t')
-# #         textPositionFile.write('\n')
-# #     textPositionFile.close()
-#     
-#     # for chromID in lengths:
-# #         for cluster in yvalues:
-# #             fig = pyplot.figure(figsize=(7, 10))
-# #             pyplot.scatter(xvalues[cluster][chromID], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
-# #             pyplot.tick_params(labelsize = 3)
-# #             pyplot.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99)
-# #             pyplot.yticks(range(y[cluster]), ylabels[cluster])
-# #             pyplot.xticks(range(int(1e8), lengths[chromID], int(1e8)), [str(x)+'M' for x in range(100, lengths[chromID] // int(1e6), 100)])
-# #             fig.suptitle('EVE insertion positions for ' + seqid + ', cluster ' + cluster[1:] + ', in chromosome ' + str(chromNumber[chromID]), fontsize = 6, fontweight = 'bold', y = 0.98)
-# #         
-# #             saveFileName = familyDir + '/insertpositions_' + seqid + '_' + cluster + '_chr' + str(chromNumber[chromID])
-# #             pp = PdfPages(saveFileName + '.pdf')
-# #             pp.savefig(fig)
-# #             pp.close()
-# #             pyplot.close(fig)
-# # 
-# #             textPositionFile = open(saveFileName + '.txt', 'w')
-# #             for index in range(y[cluster] - 1, -1, -1):
-# #                 textPositionFile.write(ylabels[cluster][index] + '\t')
-# #                 for index2 in range(len(yvalues[cluster][chromID])):
-# #                     if yvalues[cluster][chromID][index2] == index:
-# #                         textPositionFile.write(str(xvalues[cluster][chromID][index2]) + '\t')
-# #                 textPositionFile.write('\n')
-# #             textPositionFile.close()
 
 def getSeqRecord(fileNameFASTA):
     try:
@@ -1526,8 +1140,6 @@ def consolidateAll():
         tree = ET.parse(str(file))
         root = tree.getroot()
         for contig in root.iterchildren():   # one per virus per contig
-#         for event, contig in ET.iterparse(str(file)):
-#             if contig.tag == 'contig':
             contigName = contig.attrib['name']
             hit = {}
             v = contig.find('virushit')
@@ -1581,10 +1193,6 @@ def consolidateAll():
                 combinedSeq = reverseComplement(combinedSeq)
             virus_fasta_percontig.write(combinedSeq + '\n') 
 
-#                 if hit[0] > hit[-1]:
-#                     hit = hit[::-1]
-#                hit = tuple(hit)
-
             recordedIDs = []
             insertSites[(seqid, stitle)][specimen][contigName]['match'] = []
             flanks = contig.find('flanks')
@@ -1618,7 +1226,6 @@ def consolidateAll():
             insertSites[(seqid, stitle)][specimen][contigName]['left'] = []
             for v in vectorHitsLeft:
                 if v.attrib['id'] not in recordedIDs:
-#                if 'repeat_region' not in [f.attrib['type'] for f in v.findall('feature')]:
                     aedes_qstart = int(v.find('qstart').text)
                     aedes_qend = int(v.find('qend').text)
                     virus_qstart = qpos[0][0]
@@ -1629,7 +1236,6 @@ def consolidateAll():
             insertSites[(seqid, stitle)][specimen][contigName]['right'] = []
             for v in vectorHitsRight:
                 if v.attrib['id'] not in recordedIDs:
-#                if 'repeat_region' not in [f.attrib['type'] for f in v.findall('feature')]:
                     aedes_qstart = int(v.find('qstart').text)
                     aedes_qend = int(v.find('qend').text)
                     virus_qstart = qpos[0][0]
@@ -1639,14 +1245,9 @@ def consolidateAll():
         
             numVectorHits = len(vectorHitsLeft + vectorHitsRight)
         
-#            numOverlapVectorHits = len(contig.findall('vectorhitoverlap'))
             features = []
             featureSummary = contig.find('featuresummary')
             if featureSummary is not None:
-#                     total = 0
-#                     for f in featureSummary:
-#                         if f.tag != 'None':
-#                             total += int(f.text)
                 for f in featureSummary:
                     if f.tag != 'None':
                         features.append((f.tag, int(f.text) / numVectorHits))
@@ -1657,7 +1258,6 @@ def consolidateAll():
         
             flanks = contig.find('flanks')
             matches = flanks.findall('match')
-#                numVectorHits = len(contig.findall('vectorhitleft') + contig.findall('vectorhitright'))
             if len(matches) > 0:
                 if specimen not in viralHits2:
                     viralHits2[specimen] = []
@@ -1667,7 +1267,6 @@ def consolidateAll():
                     viralHits1[specimen] = []
                 viralHits1[specimen].append((seqid, stitle, hit, features))
             
-#            if numOverlapVectorHits > 0:
             if contig.attrib['inreference'] == 'True':
                 if specimen not in viralHits0:
                     viralHits0[specimen] = []
@@ -1676,7 +1275,6 @@ def consolidateAll():
             if (seqid, stitle, hit) not in allHits:
                 allHits.append((seqid, stitle, hit, features))
             
-#            contig.clear()
         virus_fasta.close()
         virus_fasta_percontig.close()
         
@@ -1773,7 +1371,6 @@ def consolidateAll():
         seqOutPerContig.write(viralSeqs[(seqid, stitle)][referenceID] + '\n')
         for specimen in sortedSpecimens:
             region, num = specimen2Label[specimen]
-#            region = region.replace(' ', '_')
             posSpecimen = []
             for contigName in positions[(seqid, stitle)][specimen]:
                 posSpecimen.extend(positions[(seqid, stitle)][specimen][contigName])
@@ -1803,19 +1400,15 @@ def consolidateAll():
                     bottom += abs(end - start) + 1
                 pident = top / bottom
                 
-                #seqOutPerContig.write('>' + region + '_' + str(num) + '__contig' + str(contigCount) + '_' + posString[:-1] + '_pident_' + '{:5.3f}'.format(pident) + '\n')
                 seqOutPerContig.write('>' + specimen + '_|_' + contigName + '_|_' + posString[:-1] + '_pident_' + '{:5.3f}'.format(pident) + '\n')
                 seqOutPerContig.write(viralSeqs[(seqid, stitle)][specimen][contigName] + '\n')
                 contigCount += 1
         seqOut.close()
         seqOutPerContig.close()
         
-        # Plot insertion positions.
+        # Cluster.
         
-#        if seqid == 'NC_001564.2':
         clusteredFileName = findClusters(seqOutPerContigFileName)
-#            if clusteredFileName is not None:
-#                drawInsertSites(clusteredFileName, insertSites, seqid, stitle, specimen2Label, FAMILY_DIR)
     
     allViruses = []
     for entry in allHits:
@@ -1823,7 +1416,6 @@ def consolidateAll():
     allViruses = list(set(allViruses))
     allViruses.sort()
     
-#    fams = readFamFile()
     allFamilies = []
     for stitle, seqid in allViruses:
         if seqid not in fams:
@@ -1867,15 +1459,7 @@ def consolidateAll():
                 if feature.type == 'CDS':
                     minCDSPos = min(minCDSPos, feature.location.start)
             startPositions[(seqid, stitle)] = minCDSPos
-    
-#         famHits = {}
-#         for acc in famACCs:
-#             for specimen in allVirusHits[acc]:
-#                 if specimen not in famHits:
-#                     famHits[specimen] = Hits()
-#                 allVirusHits[acc][specimen].adjust(startPositions[repACC] - startPositions[acc])
-#                 famHits[specimen].addHits(allVirusHits[acc][specimen].getPrimaryHitsOnly())  # only primary hits so one hit per contig
-                
+                    
         seqOut = open(str(Path(FAMILY_DIR) / ('sequences_' + family + '_per_specimen_aligned.fasta')), 'w')
         seqOutPerContig = open(str(Path(FAMILY_DIR) / ('sequences_' + family + '_per_contig_aligned.fasta')), 'w')
         
@@ -1985,8 +1569,6 @@ class MyCustomTranslator(BiopythonTranslator):
 
 def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL5_hits, showPlot, small):    
 
-#    hits = getHits(acc)
-
     if not Path(VIRUSES_DIR).exists():
         os.system('mkdir ' + VIRUSES_DIR)
     DIAGRAMS_DIR = VIRUSES_DIR + 'diagrams/'
@@ -1996,9 +1578,6 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL
     if not Path(FAMILY_DIR).exists():
         os.system('mkdir ' + FAMILY_DIR)
     
-#     if not Path(outputDir).exists():
-#         os.mkdir(outputDir)
-
     if small:
         width = 3
         thickness = 1
@@ -2064,9 +1643,6 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL
                 else:
                     color = (g, 0, 0) + (transparency,) # red
                     g = max(g - 0.25, 0)
-#                 if hit.doesOverlap():
-#                     lc = (1, 1, 1) + (transparency,)    # white
-#                 else:
                 lc = (0, 0, 0, 0)
                 for index in range(0, len(hit), 2):
                     start = hit[index]
@@ -2076,24 +1652,6 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL
                     lc = (1, 1, 1) + (transparency,)    # white
                     for start, end in hit.getData():
                         features[specimen].append(GraphicFeature(start=start, end=end, strand=1, color=color, label = None, thickness = thickness, linewidth = 1, linecolor = lc))
-
-            
-#     for specimen in hits2:
-#         g = 1.0
-#         for hit in hits2[specimen].getHits():
-#             if len(hit) == 2:
-#                 color = (0, 0, 1, 0.25)   # translucent blue
-#             else:
-#                 color = (g, 0, 0, 0.25)   # translucent red
-#                 g = g - 0.25
-#             if hit.doesOverlap():
-#                 lc = (1, 1, 1, 0.25)      # white
-#             else:
-#                 lc = (0, 0, 0, 0)
-#             for index in range(0, len(hit), 2):
-#                 start = hit[index]
-#                 end = hit[index + 1]
-#                 features[specimen].append(GraphicFeature(start=start, end=end, strand=1, color=color, label = None, thickness = thickness, linewidth = 0, linecolor = lc))
         
     newFeatures = {}
     for specimen in features:
@@ -2188,7 +1746,6 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL
        
         for specimen in specimens:
             specimenName = specimen[0] + ' ' + str(specimen[1])
-#            writelog(specimenName)
             record = GraphicRecord(features = newFeatures[specimen], sequence_length = virusRecord.sequence_length, feature_level_height = 0)
             record.plot(ax = ax[axisIndex], figure_width=width, with_ruler = False, draw_line = draw_line)
             
@@ -2212,7 +1769,6 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showAaegL
         pp = PdfPages(str(Path(FAMILY_DIR) / figName))
         pp.savefig(fig)
         pp.close()
-#        fig.savefig(Path(FAMILY_DIR) / figName)
         pyplot.close(fig)
 
 def getHitsForDiagram():
@@ -2423,10 +1979,3 @@ def main():
 #    drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)
     
 main()
-#doAll()
-#xmlFilename = '/Volumes/Data/aegypti/analyzed/Bangkok_Thailand_01.LIN210A1679/spades_all/Bangkok_Thailand_01.LIN210A1679_all_hits.xml'
-#drawXML(xmlFilename, str(Path(xmlFilename).parent / 'diagrams'), False)
-#consolidateAll(True, True)
-#xmlFilename = getHits(str(Path(ROOT_DIR + 'Cuanda_Angola_16.LIN210A1734')), 'all', 100, EVALUE_A)  #3 = get hits
-#drawAll(False)
-#drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)
