@@ -1,3 +1,4 @@
+import sys
 import math
 import random
 import copy
@@ -131,7 +132,7 @@ def meanSilhouetteValue(clusters, data):
                 total += (b - a) / max(a, b)
     return total / len(data)
 
-def findClusters(fileName):
+def findClusters(fileName, minK = MIN_K, maxK = MAX_K):
     print('Clustering aligned sequences in ' + fileName + '...')
     
     aln = AlignIO.read(fileName, 'fasta') # Bio.Align.MultipleSeqAlignment object
@@ -162,7 +163,9 @@ def findClusters(fileName):
         data[i] = data[i][first:last+1]
 
     silhouettes = {}
-    for k in range(MIN_K, min(MAX_K, len(data)) + 1):
+    clusters = [list(range(len(data)))]
+    silhouettes[1] = [(meanSilhouetteValue(clusters, data), clusters)]
+    for k in range(minK, min(maxK, len(data)) + 1):
         silhouettes[k] = []
         print('  k = ' + str(k))
         print('  Trial ', end='')
@@ -173,8 +176,10 @@ def findClusters(fileName):
         print()
 
     print('\n  Silhouette values:')
-    maxSV = -1
-    for k in range(MIN_K, min(MAX_K, len(data)) + 1):
+    maxSV = silhouettes[1][0][0]
+    bestK = 1
+    clusters = silhouettes[1][0][1]
+    for k in range(minK, min(maxK, len(data)) + 1):
         silhouettes[k].sort(reverse = True)
         print('  {0:>2}: '.format(k), end='')
         sumSV = 0
@@ -188,7 +193,7 @@ def findClusters(fileName):
             bestK = k
             clusters = silhouettes[k][0][1]
             
-    realK = sum([1 for cluster in clusters if len(cluster) > 0])
+    realK = sum(len(cluster) > 0 for cluster in clusters)
             
     if realK == bestK:
         print('\n  Best k = ' + str(bestK) + ' clusters have silhouette value = ' + '{0:6.4f}'.format(maxSV) + '.\n')
@@ -213,7 +218,7 @@ def findClusters(fileName):
 
     clusteredFileName = fileName.split('.fasta')[0] + '_clustered_k' + str(realK)
     clusterNum = 1
-    regionCounts = {}
+    regionCounts = {}   
     outputText = open(clusteredFileName + '.txt', 'w')
     for cluster in clusters:
         if len(cluster) > 0:
@@ -224,23 +229,24 @@ def findClusters(fileName):
             for index in cluster:
                 print('    ' + ids[index])
                 outputText.write('    ' + ids[index] + '\n')
-                region, num = getSpecimenLabel(ids[index].split('_|_')[0])
+                specimenName = ids[index].split('_|_')[0]
+                region, num = getSpecimenLabel(specimenName)
                 if region not in regionCounts[clusterNum]:
-                    regionCounts[clusterNum][region] = 1
+                    regionCounts[clusterNum][region] = [specimenName]
                 else:
-                    regionCounts[clusterNum][region] += 1
+                    regionCounts[clusterNum][region].append(specimenName)
                 records.append(copy.deepcopy(aln[index + 1]))
                 d = records[-1].description
                 records[-1].description = 'C' + str(clusterNum) + '_|_' + d
                 records[-1].id = records[-1].description
                 records[-1].name = records[-1].description
             print('\n    Region counts: ')
-            outputText.write('\n    Region counts: \n')
+            outputText.write('\n    Region counts (total / unique specimens): \n')
             sortedRegions = list(regionCounts[clusterNum].keys())
             sortedRegions.sort()
             for region in sortedRegions:
-                print('      ' + region + ' - ' + str(regionCounts[clusterNum][region]))
-                outputText.write('      ' + region + ' - ' + str(regionCounts[clusterNum][region]) + '\n')
+                print('      ' + region + ' - ' + str(len(regionCounts[clusterNum][region])) + ' / ' + str(len(set(regionCounts[clusterNum][region]))))
+                outputText.write('      ' + region + ' - ' + str(len(regionCounts[clusterNum][region])) + ' / ' + str(len(set(regionCounts[clusterNum][region]))) + '\n')
             clusterNum += 1
             print()
             outputText.write('\n')
@@ -252,21 +258,32 @@ def findClusters(fileName):
     
     return clusteredFileName + '.fasta'
 
-# # Phenuiviridae
-# findClusters('/Volumes/Data2/results4/viruses/sequences/Phenuiviridae/sequences_NC_038263.1_per_contig_aligned.fasta')
-# # Flaviviridae
-# findClusters('/Volumes/Data2/results4/viruses/sequences/Flaviviridae/sequences_NC_001564.2_per_contig_aligned.fasta')
-# # findClusters('/Volumes/Data2/results4/viruses/sequences/Flaviviridae/sequences_Flaviviridae_per_contig_aligned.fasta')
-# # Xinmoviridae
-# findClusters('/Volumes/Data2/results4/viruses/sequences/Xinmoviridae/sequences_MH237595.1_per_contig_aligned.fasta')
-# findClusters('/Volumes/Data2/results4/viruses/sequences/Xinmoviridae/sequences_MH037149.1_per_contig_aligned.fasta')
-# findClusters('/Volumes/Data2/results4/viruses/sequences/Xinmoviridae/sequences_MH430659.1_per_contig_aligned.fasta')
-# findClusters('/Volumes/Data2/results4/viruses/sequences/Xinmoviridae/sequences_Xinmoviridae_per_contig_aligned.fasta')
-# findClusters('/Volumes/Data2/results4/viruses/sequences/Xinmoviridae/sequences_MH037149.1_per_specimen_aligned.fasta')
-# # Orthomyxoviridae
-# findClusters('/Volumes/Data2/results4/viruses/sequences/Orthomyxoviridae/sequences_MF176251.1_per_contig_aligned.fasta')
-# findClusters('/Volumes/Data2/results4/viruses/sequences/Orthomyxoviridae/sequences_MF176337.1_per_contig_aligned.fasta')
-
-
-#from msa import drawMSA
-#drawMSA(fileName.split('.fasta')[0] + '_clustered.fasta', 'NC_038263.1', '')
+def usage():
+    print('Usage: ' + sys.argv[0] + ' filename.fasta [min_k max_k]')
+    
+def main():
+    if len(sys.argv) < 2:
+        usage()
+        return
+    
+    if len(sys.argv) >= 3:
+        try:
+            minK = int(sys.argv[2])
+        except:
+            usage()
+            return
+    else:
+        minK = MIN_K
+    if len(sys.argv) >= 4:
+        try:
+            maxK = int(sys.argv[3])
+        except:
+            usage()
+            return
+    else:
+        maxK = MAX_K
+        
+    findClusters(sys.argv[1], minK, maxK)
+    
+if __name__ == '__main__':
+    main()

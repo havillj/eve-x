@@ -482,7 +482,7 @@ def getHits(dirName): #, maxFlankingHits):
                     aedes_qseq = aedesHit[A_QSEQ]
                     aedes_qstart = int(aedesHit[A_QSTART])
                     aedes_qend = int(aedesHit[A_QEND])
-                    if ((virus_qstart - aedes_qend > MIN_FLANKING_DISTANCE) or (aedes_qstart - virus_qend > MIN_FLANKING_DISTANCE)) and (len(aedes_qseq) < MIN_FLANKING_HIT_LENGTH):
+                    if ((virus_qstart - aedes_qend > MAX_FLANKING_DISTANCE) or (aedes_qstart - virus_qend > MAX_FLANKING_DISTANCE)) and (len(aedes_qseq) < MIN_FLANKING_HIT_LENGTH):
                         writelog(contig + ': discarded distant Aedes hit with length ' + str(len(aedes_qseq)) + ' < ' + str(MIN_FLANKING_HIT_LENGTH))
                         continue
                     hitComplexity = complexity(aedes_qseq, COMPLEXITY_K)  # COMPLEXITY TEST
@@ -936,16 +936,6 @@ def drawXML(fileName):
                     
 ###############################################################################
 
-def reverseComplement(dna):
-	'''Return the reverse complement of dna.'''
-	
-	dna = dna.upper()
-	basecomplement = {'A': 'T', 'C': 'G', 'T': 'A', 'G': 'C'} 
-	complement = ''
-	for base in reversed(dna):
-		complement = complement + basecomplement.get(base, base)
-	return complement
-
 def getSeqRecord(fileNameFASTA):
     try:
         refFile = open(fileNameFASTA, 'r')
@@ -975,7 +965,6 @@ def writeSummaryTable(fileName, viralHits, viralHits0, viralHits1, viralHits2, a
     out = open(fileName, 'w')
 
     famVir = list(zip(allFamilies, allViruses))
-#    famVir.sort()
         
     specimens = list(viralHits.keys())
     specimenLabels = {}
@@ -1078,7 +1067,10 @@ def writeSummaryTable(fileName, viralHits, viralHits0, viralHits1, viralHits2, a
             for s in rangeList:
                 for i in range(0, len(s) - 2, 2):
                     rangeString += str(s[i]) + '-' + str(s[i+1]) + ', '
-                rangeString = rangeString[:-2] + ('*' * s[-2]) + ' (' + s[-1] + ') | '
+                rangeString = rangeString[:-2] + ('*' * s[-2]) 
+                if len(s[-1]) > 0:     # if features to show
+                    rangeString += ' (' + s[-1] + ')'
+                rangeString += ' | '
             if length > 0:
                 out.write(rangeString[:-1] + '| ' + str(length))
                 counts[(fam, (stitle, seqid))] += 1
@@ -1151,6 +1143,9 @@ def consolidateAll():
                 stitle = stitle.lstrip('|')
             
             if BEST_HITS_ONLY and (contig.attrib['besthit'] != 'True'):  # and (stitle not in PREFERRED_ACCS):  # last condition may result in >1 hit per original contig
+                continue
+                
+            if OMIT_EVES_IN_REFERENCE and (contig.attrib['inreference'] == 'True'):
                 continue
             
             if (seqid, stitle) not in viralSeqs:
@@ -1230,7 +1225,7 @@ def consolidateAll():
                     aedes_qend = int(v.find('qend').text)
                     virus_qstart = qpos[0][0]
                     virus_qend = qpos[-1][1]
-                    if (-ALLOWED_OVERLAP <= virus_qstart - aedes_qend <= MIN_FLANKING_DISTANCE) or (-ALLOWED_OVERLAP <= aedes_qstart - virus_qend <= MIN_FLANKING_DISTANCE): # or (len(aedes_qseq) >= MIN_FLANKING_HIT_LENGTH):
+                    if (-ALLOWED_OVERLAP <= virus_qstart - aedes_qend <= MAX_FLANKING_DISTANCE) or (-ALLOWED_OVERLAP <= aedes_qstart - virus_qend <= MAX_FLANKING_DISTANCE): # or (len(aedes_qseq) >= MIN_FLANKING_HIT_LENGTH):
                         insertSites[(seqid, stitle)][specimen][contigName]['left'].append((v.attrib['seqid'], int(v.find('send').text)))
                 
             insertSites[(seqid, stitle)][specimen][contigName]['right'] = []
@@ -1240,7 +1235,7 @@ def consolidateAll():
                     aedes_qend = int(v.find('qend').text)
                     virus_qstart = qpos[0][0]
                     virus_qend = qpos[-1][1]
-                    if (-ALLOWED_OVERLAP <= virus_qstart - aedes_qend <= MIN_FLANKING_DISTANCE) or (-ALLOWED_OVERLAP <= aedes_qstart - virus_qend <= MIN_FLANKING_DISTANCE): # or (len(aedes_qseq) >= MIN_FLANKING_HIT_LENGTH):
+                    if (-ALLOWED_OVERLAP <= virus_qstart - aedes_qend <= MAX_FLANKING_DISTANCE) or (-ALLOWED_OVERLAP <= aedes_qstart - virus_qend <= MAX_FLANKING_DISTANCE): # or (len(aedes_qseq) >= MIN_FLANKING_HIT_LENGTH):
                         insertSites[(seqid, stitle)][specimen][contigName]['right'].append((v.attrib['seqid'], int(v.find('sstart').text)))
         
             numVectorHits = len(vectorHitsLeft + vectorHitsRight)
@@ -1407,8 +1402,8 @@ def consolidateAll():
         seqOutPerContig.close()
         
         # Cluster.
-        
-        clusteredFileName = findClusters(seqOutPerContigFileName)
+        if DO_CLUSTERING:
+            clusteredFileName = findClusters(seqOutPerContigFileName)
     
     allViruses = []
     for entry in allHits:
@@ -1863,15 +1858,8 @@ def drawAll(separatePops = False):
     fams = readFamFile()
 
     for acc in allVirusHits:
-        doVirus = False  # only draw virus if it has at least one primary hit
-        for specimen in allVirusHits[acc]:
-            for hit in allVirusHits[acc][specimen].getHits():
-                if hit.isPrimary():
-                    doVirus = True
-                    break
-            if doVirus:
-                break
-        if doVirus:
+        hitCount = sum(hit.isPrimary() for specimen in allVirusHits[acc] for hit in allVirusHits[acc][specimen].getHits())
+        if hitCount >= MIN_HITS_TO_SHOW_VIRUS:
             if acc not in fams:
                 fam = getFamily(acc)
                 fams[acc] = fam
@@ -1978,4 +1966,5 @@ def main():
     drawAll(False)
 #    drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)
     
-main()
+#main()
+consolidateAll()
