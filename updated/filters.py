@@ -66,14 +66,17 @@ def getOverlaps(dir):
 
             scaffoldsPath = f"/Volumes/Data2/specimens/{dir}"
 
+            leftFlankDist = qend - vqstart
+            rightFlankDist = vqend - qstart
+
             if qend > vqstart:
-                leftOverlap = querySeq[: qend - vqstart]
+                leftOverlap = querySeq[: leftFlankDist]
             if qstart < vqend:
-                rightOverlap = querySeq[- (vqend - qstart):]
+                rightOverlap = querySeq[-rightFlankDist:]
             if lastLeft > firstRight:
                 overlapSeq = getContig(scaffoldsPath, i.split("__")[0], firstRight, lastLeft)
 
-            overlapInfo = [dir, contigname,lastLeft,firstRight, overlapSeq, qend - qstart, firstRight - lastLeft, leftOverlap, rightOverlap]    #distance in the contig, distance in the aa genome
+            overlapInfo = [dir, contigname,lastLeft,firstRight, overlapSeq, qend - qstart, firstRight - lastLeft, leftFlankDist, rightFlankDist, leftOverlap, rightOverlap]    #distance in the contig, distance in the aa genome
 
             """if overlapInfo[3] >= 0 and overlapInfo[4] >= 0:  #checking for insertions in contig
                 overlapInfo.append(overlapInfo[3] - overlapInfo[4])#inserted bases in contig
@@ -120,10 +123,10 @@ def consolidate():
     for path in paths:
         xmlFiles.append(path)
 
-    with open("allOverlaps.tsv", "w") as outfile:
+    with open("allOverlaps2.tsv", "w") as outfile:
 
         tsv_writer = csv.writer(outfile, delimiter = "\t")
-        tsv_writer.writerow(["Specimen Name", "Node", "Accession ID","Virus Name", "End Position", "Start Position","Sequence Overlap", "Contig Flanks Distance", "AA Genome Flanks Distance", "Left Overlap", "Right Overlap"])
+        tsv_writer.writerow(["Specimen Name", "Node", "Accession ID","Virus Name", "End Position", "Start Position","Sequence Overlap", "Contig Flanks Distance", "AA Genome Flanks Distance", "Left Flank Distance", "Right Flank Distance", "Left Overlap", "Right Overlap"])
 
         count = 0
         for file in xmlFiles:
