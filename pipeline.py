@@ -1105,9 +1105,10 @@ def consolidateAll():
     xmlFiles = []
     specimensPath = Path(SPECIMENS_DIR)
     for specimenDir in specimensPath.iterdir():
-        for file in (specimenDir / 'results/xml').iterdir():
-            if ('_hits_features.xml' in file.name) or (('_hits.xml' in file.name) and not Path(str(file)[:-4] + '_features.xml').exists()):
-                xmlFiles.append(file.resolve())
+        if specimenDir.name[0] != '.':
+            for file in (specimenDir / 'results/xml').iterdir():
+                if (file.name[0] != '.') and (('_hits_features.xml' in file.name) or (('_hits.xml' in file.name) and not Path(str(file)[:-4] + '_features.xml').exists())):
+                    xmlFiles.append(file.resolve())
     xmlFiles.sort()
     
     specimen2Label = {}
@@ -1352,8 +1353,10 @@ def consolidateAll():
         
         seqOutFileName = str(Path(FAMILY_DIR) / ('sequences_' + seqid + '_per_specimen_aligned.fasta'))
         seqOutPerContigFileName = str(Path(FAMILY_DIR) / ('sequences_' + seqid + '_per_contig_aligned.fasta'))
+        seqOutPerContigUnalignedFileName = str(Path(FAMILY_DIR) / ('sequences_' + seqid + '_per_contig_unaligned.fasta'))
         seqOut = open(seqOutFileName, 'w')
         seqOutPerContig = open(seqOutPerContigFileName, 'w')
+        seqOutPerContigUnaligned = open(seqOutPerContigUnalignedFileName, 'w')
         sortedSpecimens = list(viralSeqs[(seqid, stitle)].keys())
         sortedSpecimens.remove(referenceID)
         sortedSpecimens.sort()
@@ -1374,7 +1377,7 @@ def consolidateAll():
             for start, end in posSpecimen:
                 posString += str(start) + '-' + str(end) + ','
                 
-            seqOut.write('>' + region + '_' + str(num) + '_' + posString[:-1] + '\n')
+            seqOut.write('>' + region + '_' + str(num) + '_' + seqid + '_' + posString[:-1] + '\n')
             seqOut.write(viralSeqsBySpecimen[(seqid, stitle)][specimen] + '\n')
             contigCount = 1
             for contigName in viralSeqs[(seqid, stitle)][specimen]:
@@ -1395,11 +1398,16 @@ def consolidateAll():
                     bottom += abs(end - start) + 1
                 pident = top / bottom
                 
-                seqOutPerContig.write('>' + specimen + '_|_' + contigName + '_|_' + posString[:-1] + '_pident_' + '{:5.3f}'.format(pident) + '\n')
+                seqOutPerContig.write('>' + specimen + '_|_' + contigName + '_|_' + seqid + '_' + posString[:-1] + '_pident_' + '{:5.3f}'.format(pident) + '\n')
                 seqOutPerContig.write(viralSeqs[(seqid, stitle)][specimen][contigName] + '\n')
+                
+                seqOutPerContigUnaligned.write('>' + specimen + '_|_' + contigName + '_|_' + seqid + '_' + posString[:-1] + '_pident_' + '{:5.3f}'.format(pident) + '\n')
+                seqOutPerContigUnaligned.write(viralSeqs[(seqid, stitle)][specimen][contigName].replace('-', '') + '\n')
+
                 contigCount += 1
         seqOut.close()
         seqOutPerContig.close()
+        seqOutPerContigUnaligned.close()
         
         # Cluster.
         if DO_CLUSTERING:
@@ -1457,6 +1465,7 @@ def consolidateAll():
                     
         seqOut = open(str(Path(FAMILY_DIR) / ('sequences_' + family + '_per_specimen_aligned.fasta')), 'w')
         seqOutPerContig = open(str(Path(FAMILY_DIR) / ('sequences_' + family + '_per_contig_aligned.fasta')), 'w')
+        seqOutPerContigUnaligned = open(str(Path(FAMILY_DIR) / ('sequences_' + family + '_per_contig_unaligned.fasta')), 'w')
         
         seqOut.write('>' + repACC[0] + ' ' + repACC[1] + '\n')
         seqOut.write(viralSeqs[repACC][repACC[0]] + '\n')
@@ -1498,6 +1507,8 @@ def consolidateAll():
                     for start, end in positions[(seqid, stitle)][specimen][contigName]:
                         posString += str(start) + '-' + str(end) + ','
                     seqOutPerContig.write('>' + region + '_' + str(num) + '__contig' + str(contigCount) + '_' + seqid + '_' + posString[:-1] + '\n')
+                    seqOutPerContigUnaligned.write('>' + region + '_' + str(num) + '__contig' + str(contigCount) + '_' + seqid + '_' + posString[:-1] + '\n')
+                    seqOutPerContigUnaligned.write(viralSeqs[(seqid, stitle)][specimen][contigName].replace('-', '') + '\n')
                     if adjust > 0:
                         seqOutPerContig.write(('{:-<' + str(repLength) + '}').format('-' * addGaps + viralSeqs[(seqid, stitle)][specimen][contigName][:repLength-addGaps]) + '\n')
                     else:
@@ -1505,6 +1516,7 @@ def consolidateAll():
                     contigCount += 1
         seqOut.close()
         seqOutPerContig.close()
+        seqOutPerContigUnaligned.close()
 
     writeSummaryTable(str(Path(RESULTS_DIR) / 'results.tsv'), viralHits, viralHits0, viralHits1, viralHits2, allFamilies, allViruses)
 
@@ -1905,7 +1917,6 @@ def doIt(dirName, filenameBAM):
 
 def doAll():
     dirList = [dir for dir in Path(SPECIMENS_DIR).iterdir() if dir.is_dir() and 'combined' not in dir.name]
-    dirList = [Path('/Volumes/Data2/specimens/Bangkok_Thailand_01.LIN210A1679/')]
     
     count = 0
     dirList.sort()
@@ -1966,5 +1977,5 @@ def main():
     drawAll(False)
 #    drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)
     
-#main()
-consolidateAll()
+main()
+#consolidateAll()

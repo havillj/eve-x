@@ -26,7 +26,7 @@ VIRUS_DB = 'virusdb'
 ROOT_DIR = '/Volumes/Data2/'  # '/home/havill/data/aegypti/analyzed/'
 SPECIMENS_DIR = ROOT_DIR + 'specimens/'
 
-RESULTS_DIR = ROOT_DIR + 'results/'
+RESULTS_DIR = ROOT_DIR + 'results20k/'
 VIRUSES_DIR = RESULTS_DIR + 'viruses/'
 SEQUENCES_DIR = VIRUSES_DIR + 'sequences/'
 
@@ -44,18 +44,18 @@ LOGFILE_PATH = Path(ROOT_DIR) / LOGFILE_NAME
 MIN_PIDENT = 80
 EVALUE_V = 1e-10
 EVALUE_A = 1e-10
-ALLOWED_OVERLAP = 20    # bp aedes hits may overlap ends of virus hits or each other
-OVERLAP_FRACTION = 0.9  # if this fraction of a hit overlaps with an Aedes hit, it is considered to be present in the reference genome
-MAX_FLANK_DISTANCE = 10000
+ALLOWED_OVERLAP = 20           # bp aedes hits may overlap ends of virus hits or each other
+OVERLAP_FRACTION = 0.95        # if this fraction of a hit overlaps with an Aedes hit, it is considered to be present in the reference genome
+MAX_FLANK_DISTANCE = 20000
 COMPLEXITY_K = 3
 COMPLEXITY_CUTOFF = 0.75
 MIN_VIRUS_HIT_LENGTH = 100
 #MIN_FLANKING_QSTART = 10        # min distance a flanking hit must be from either end of the contig  # REMOVE PROBABLY
-MIN_FLANKING_HIT_LENGTH = 100   # min length of a flanking hit if it passes above test
+MIN_FLANKING_HIT_LENGTH = 100    # min length of a flanking hit if it passes above test
 MAX_FLANKING_DISTANCE = 200    
 #MAX_FLANKING_HITS = 10
-FLANK_DRAW_LIMIT = 3
-FIND_FEATURES = False
+FLANK_DRAW_LIMIT = 5
+FIND_FEATURES = True
 OMIT_EVES_IN_REFERENCE = True
 BEST_HITS_ONLY = True
 DO_CLUSTERING = False
@@ -196,6 +196,8 @@ def writelog(message, alsoPrint = False):
     if alsoPrint:
         print(message)
         
+###############################################################################
+        
 def getContig(dirName, contigName, start, end):
     scaffoldsFilename = str(Path(dirName) / 'results/scaffolds/scaffolds.fasta')
     scaffoldRecords = SeqIO.index(scaffoldsFilename, 'fasta')
@@ -203,7 +205,8 @@ def getContig(dirName, contigName, start, end):
     return str(contigRecord.seq)[start - 1:end]  # account for 1-based indexing
         
 def main():
-    print(complexity())
+    print(getContig('/Volumes/Data2/specimens/Paqueta-Brazil-18.LIN210A2144', 'NODE_31282_length_646_cov_2.050967', 260, 297))
+    
 if __name__ == '__main__':
     main()
     

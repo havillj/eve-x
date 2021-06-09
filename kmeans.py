@@ -132,7 +132,7 @@ def meanSilhouetteValue(clusters, data):
                 total += (b - a) / max(a, b)
     return total / len(data)
 
-def findClusters(fileName, minK = MIN_K, maxK = MAX_K):
+def findClusters(fileName, omitFirst = True, minK = MIN_K, maxK = MAX_K):
     print('Clustering aligned sequences in ' + fileName + '...')
     
     aln = AlignIO.read(fileName, 'fasta') # Bio.Align.MultipleSeqAlignment object
@@ -148,7 +148,7 @@ def findClusters(fileName, minK = MIN_K, maxK = MAX_K):
     ids = []
     first = len(refSeq) - 1
     last = 0
-    for i in range(1, len(aln)):
+    for i in range(int(omitFirst), len(aln)):
         seq = aln[i].seq
         vector = np.zeros(len(refSeq))
         for j in range(len(seq)):
@@ -164,7 +164,7 @@ def findClusters(fileName, minK = MIN_K, maxK = MAX_K):
 
     silhouettes = {}
     clusters = [list(range(len(data)))]
-    silhouettes[1] = [(meanSilhouetteValue(clusters, data), clusters)]
+#    silhouettes[1] = [(meanSilhouetteValue(clusters, data), clusters)]
     for k in range(minK, min(maxK, len(data)) + 1):
         silhouettes[k] = []
         print('  k = ' + str(k))
@@ -176,9 +176,10 @@ def findClusters(fileName, minK = MIN_K, maxK = MAX_K):
         print()
 
     print('\n  Silhouette values:')
-    maxSV = silhouettes[1][0][0]
-    bestK = 1
-    clusters = silhouettes[1][0][1]
+    maxSV = -1
+#    maxSV = silhouettes[1][0][0]
+#    bestK = 1
+#    clusters = silhouettes[1][0][1]
     for k in range(minK, min(maxK, len(data)) + 1):
         silhouettes[k].sort(reverse = True)
         print('  {0:>2}: '.format(k), end='')
@@ -254,36 +255,45 @@ def findClusters(fileName, minK = MIN_K, maxK = MAX_K):
     
     newAlignment = MultipleSeqAlignment(records)
     AlignIO.write(newAlignment, clusteredFileName + '.fasta', 'fasta')
-    print('  Clustered alignment written to ' + clusteredFileName)
+    print('  Clustered alignment written to ' + clusteredFileName + '.fasta')
     
     return clusteredFileName + '.fasta'
 
 def usage():
-    print('Usage: ' + sys.argv[0] + ' filename.fasta [min_k max_k]')
+    print('Usage: ' + sys.argv[0] + ' [--min_k=k] [--max_k=k] [--omit_first] filename.fasta')
     
 def main():
     if len(sys.argv) < 2:
         usage()
         return
     
-    if len(sys.argv) >= 3:
-        try:
-            minK = int(sys.argv[2])
-        except:
+    omitFirst = False
+    minK = MIN_K
+    maxK = MAX_K
+    for arg in sys.argv[1:-1]:
+        if arg.startswith('--min_k'):
+            try:
+                minK = int(arg.split('=')[1])
+            except:
+                usage()
+                return
+        elif arg.startswith('--max_k'):
+            try:
+                maxK = int(arg.split('=')[1])
+            except:
+                usage()
+                return
+        elif arg == '--omit_first':
+            omitFirst = True
+        else:
             usage()
             return
-    else:
-        minK = MIN_K
-    if len(sys.argv) >= 4:
-        try:
-            maxK = int(sys.argv[3])
-        except:
-            usage()
-            return
-    else:
-        maxK = MAX_K
+    
+    if sys.argv[-1][0] == '-':
+        usage()
+        return
         
-    findClusters(sys.argv[1], minK, maxK)
+    findClusters(sys.argv[-1], omitFirst, minK, maxK)
     
 if __name__ == '__main__':
     main()

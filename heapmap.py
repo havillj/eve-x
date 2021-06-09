@@ -1,4 +1,5 @@
 import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as pyplot
 import numpy as np
 from pathlib import Path
@@ -50,7 +51,7 @@ def heatmap(data, row_labels, col_labels, ax=None, cbar_kw={}, cbarlabel="", **k
                    labeltop=True, labelbottom=False)
 
     # Rotate the tick labels and set their alignment.
-    pyplot.setp(ax.get_xticklabels(), rotation=0, ha="center",
+    pyplot.setp(ax.get_xticklabels(), rotation=40, ha="left",
              rotation_mode="anchor")
 
     # Turn spines off and create white grid.
@@ -156,4 +157,4 @@ def makeHeatMap(fileName, xlabels):
     figFileName = Path(fileName).name[:-4] + '.pdf'
     fig.savefig(figFileName)
     
-makeHeatMap('/home/havill/data2/cfav_freq.csv', ['1', '2', '3', '4', '5'])
+makeHeatMap('/Volumes/Data2/temp_files/flav_freq.csv', ['CFAV 1', 'CFAV 2', 'CFAV 3', 'CFAV 4', 'CFAV 5', 'XAF 1', 'XAF 2', 'Merc', 'Zika', 'BVDV 1', 'BVDV 2', 'CF'])
