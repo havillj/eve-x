@@ -9,8 +9,9 @@ from lxml import etree
 from util import *
 from matplotlib.backends.backend_pdf import PdfPages
 from pipeline_utilities import *
-#import dash_design_kit as ddk
-#import dash_daq as daq
+import dash_design_kit as ddk
+import dash_daq as daq
+
 
 app = dash.Dash()
 
@@ -51,7 +52,7 @@ app.layout = html.Div([
 
     html.Hr(),
 
-    dcc.Dropdown(id='virus-dropdown', value = 'Aedes aegypti anphevirus'),
+    dcc.Dropdown(id='virus-dropdown', options = [{'label': k, 'value': k} for k in all_viruses], value = 'Aedes aegypti anphevirus'),
 
     html.Hr(),
 
@@ -61,16 +62,23 @@ app.layout = html.Div([
     #     labelPosition="top"),
     #
     # dcc.Input(
-    #         id="match_range", type="number", placeholder="input with range",
-    #         min=10, max=10,
+    #         id="match_max", type="number", placeholder="Max number of matches to show?",
+    #         min=1, max=10,
+    #     ),
+
+    # html.Hr(),
+    #
+    # daq.BooleanSwitch(
+    #     on=True,
+    #     label="Use inversions?",
+    #     labelPosition="top"),
+    #
+    # dcc.Input(
+    #         id="inversion_max", type="number", placeholder="Max number of inversions to show?",
+    #         min=1, max=10,
     #     ),
 
     html.Hr(),
-
-    # daq.BooleanSwitch(
-    #     on=True,
-    #     label="Use Inversions?",
-    #     labelPosition="top"),
 
     html.Img(id = 'trial')
 ])
@@ -87,17 +95,23 @@ def set_cities_options(selected_country):
 # def set_numbers_options(selected_city):
 #     return [{'label': i, 'value': i} for i in all_specimens[selected_city]]
 
-# @app.callback(
-#     dash.dependencies.Output('virus-dropdown', 'value'),
-#     [dash.dependencies.Input('virus-dropdown', 'options')])
-# def set_virus_value(available_options):
-#     return available_options[0]['value']
+@app.callback(
+    dash.dependencies.Output('virus-dropdown', 'value'),
+    [dash.dependencies.Input('virus-dropdown', 'options')])
+def set_virus_value(available_options):
+    return available_options[0]['value']
+
+# dash.dependencies.Input('Use matches?', 'value'),
+# dash.dependencies.Input('match_max?', 'value'),
+# dash.dependencies.Input('Use inversions?', 'value'),
+# dash.dependencies.Input('inversion_max?', 'value')
 
 @app.callback(
     dash.dependencies.Output('trial', 'src'), # src attribute
     [dash.dependencies.Input('countries-dropdown', 'value'),
     dash.dependencies.Input('numbers-dropdown', 'value'),
-    dash.dependencies.Input('virus-dropdown', 'value')])
+    dash.dependencies.Input('virus-dropdown', 'value')
+    ])
 def drawContig(spec, specNum, virus):
     matches = True
     matchNum = 2
