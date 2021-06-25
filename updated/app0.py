@@ -8,6 +8,8 @@ import io
 import base64
 from pipeline_utilities import *
 from dash.dependencies import Input, Output
+import matplotlib
+matplotlib.use('Agg')
 
 #import dash_design_kit as ddk
 #import dash_daq as daq
@@ -21,6 +23,13 @@ all_viruses = ['Aedes aegypti anphevirus', 'Aedes anphevirus', 'American plum li
   'Dengue virus', 'Kamiti River virus', 'Lassa mammarenavirus', 'Liao ning virus', 'Mercadeo virus', 'Merida virus',
    'Ochlerotatus caspius flavivirus', 'Ochlerotatus scapularis flavivirus', 'Ohlsdorf ohlsrhavirus', 'Pestivirus A', 'Radi vesiculovirus',
    'Tongilchon ohlsrhavirus', 'West Nile virus', 'Wuhan Mosquito Virus 6', 'Xishuangbanna aedes flavivirus']
+
+vFam = {'Arenaviridae': ['Lassa mammarenavirus'], 'Rhabdoviridae': ['Culex ohlsrhavirus', 'Ohlsdorf ohlsrhavirus', 'Culex tritaeniorhynchus rhabdovirus', 'Tongilchon ohlsrhavirus',
+        'Merida virus', 'Radi vesiculovirus'], 'Xinmoviridae': ['Aedes anphevirus', 'Aedes aegypti anphevirus'], 'Orthomyxoviridae': ['Wuhan Mosquito Virus 6'],
+        'Sedoreovirinae': ['Liao ning virus'], 'Flaviviridae': ['Xishuangbanna aedes flavivirus', 'Pestivirus A', 'Culiseta flavivirus', 'Mercadeo virus', 'Ochlerotatus scapularis flavivirus',
+        'Cell fusing agent virus', 'West Nile virus', 'Ochlerotatus caspius flavivirus', 'Kamiti River virus', 'Dengue virus', 'Culex Flavi-like virus'],
+        'Totiviridae': ['Australian Anopheles totivirus'], 'Bromoviridae': ['American plum line pattern virus']}
+
 
 all_regions = {
     'Angola': [1,2,3,4,5,6,8,9,10,11,12,14,16,17,18,19,20],
@@ -80,14 +89,16 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
     html.Br(),
 
     html.Div ([dcc.Dropdown( id='countries-dropdown',
-                            options=[{'label': k, 'value': k} for k in all_regions.keys()],value='Gabon',placeholder = 'Select a region',)],
-    style = {'width':'40%', 'display': 'inline-block'},
+                            options=[{'label': k, 'value': k} for k in all_regions.keys()],value='Angola',placeholder = 'Select a region',)],
+    style = {'width':'20%', 'display': 'inline-block'},
     ),
 
     html.Div([dcc.Dropdown(id='numbers-dropdown', value = '2', placeholder = 'Select a num'),],
     style = {'width':'20%', 'display': 'inline-block'},),
 
-    html.Div([dcc.Dropdown(id='virus-dropdown', options = [{'label': k, 'value': k} for k in all_viruses], value = 'Lassa mammarenavirus',
+    html.Div([dcc.Dropdown(id='family-dropdown', options = [{'label': k, 'value': k} for k in vFam.keys()],value ='Orthomyxoviridae', placeholder = 'Select a family')], style = {'width': '30%', 'display': 'inline-block'}),
+
+    html.Div([dcc.Dropdown(id='virus-dropdown', value = 'Wuhan Mosquito Virus 6',
     placeholder = 'Select a virus'),],
     style = {'width':'30%', 'display': 'inline-block'}),
 
@@ -98,22 +109,23 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
 
 
     html.Div([dbc.Row(dcc.Input(id='num-matches', type ='number', placeholder = 'Number of matches',
-                min=1, max = 5),),
+                min=0, max = 5, value = 0),),
             dbc.Row(dcc.Input(id='num-inv', type ='number', placeholder = 'Number of inv',
-                min=1, max = 5),),],
-            style = {'width':'30%', 'display': 'inline-block'})], style = {'text-align': 'center'}),
-    #html.Hr(),
+                min=0, max = 5, value = 0),),],
+            style = {'width':'30%', 'display': 'inline-block'})]),
+    html.Hr(),
 
-
-
-    #html.Hr(),
+    html.Div ([html.P("Choose a contig number"), dcc.Input(id = 'contig-num', type='number', min=1, max = 0,value=1)]),
 
     html.Img(id = 'trial')
 
 ])
 
-
-
+@app.callback(
+    dash.dependencies.Output('virus-dropdown', 'options'),
+    [dash.dependencies.Input('family-dropdown', 'value')])
+def set_virus_options(selected_family):
+    return [{'label': i, 'value': i} for i in vFam[selected_family]]
 
 
 @app.callback(
@@ -136,168 +148,232 @@ def set_virus_value(available_options):
 
 
 @app.callback(
-    dash.dependencies.Output('trial', 'src'), # src attribute
+    Output('contig-num', 'max'),
+    Output('trial', 'src'), # src attribute
     [dash.dependencies.Input('countries-dropdown', 'value'),
     dash.dependencies.Input('numbers-dropdown', 'value'),
     dash.dependencies.Input('virus-dropdown', 'value'),
     dash.dependencies.Input('match-inv-input', 'value'),
     dash.dependencies.Input('num-matches', 'value'),
     dash.dependencies.Input('num-inv', 'value'),
-    #dash.dependencies.Input('inversion_max?', 'value')
+    dash.dependencies.Input('contig-num', 'value')
     ])
 
 
-def drawContig(spec, specNum, virus, matchInv, matchNum, invNum):
+def drawContig(spec, specNum, virus, matchInv, matchNum, invNum, cNum):
+    cNum = int(cNum)-1
     if (matchInv) == 0:
-        matches = False
+        matchBool = False
         inv = False
     elif sum(matchInv) == 1:
-        matches = True
+        matchBool = True
         inv = False
     elif sum(matchInv) == 2:
-        matches = False
+        matchBool = False
         inv = True
     else:
-        matches = True
+        matchBool = True
         inv = True
 
     dir = label2Specimen[(spec,int(specNum))]
     pathN = '/Volumes/Data2/specimens/'+ dir + '/results/xml/' + dir +'_hits.xml'
 
+    picList = []
+    matches = []
+    inversions = []
 
-
+    FLANK_DRAW_LIMIT = 5
     chromNames = {'NC_035107.1': 'Chr1', 'NC_035108.1': 'Chr2', 'NC_035109.1': 'Chr3'}
 
     labelFontSize = 6
     axesFontSize = 8
     thickness = 12
-    features = []
 
     parser = etree.XMLParser(remove_blank_text=True)
     root = etree.parse(pathN, parser).getroot()
-
     try:
-        contig = root.xpath(f"""/root/contig[@besthit="True"]/virushit[@stitle = '{virus}']""")[0]
+        root.xpath(f"""/root/contig[@besthit="True"]/virushit[@stitle = '{virus}']""")[0]
     except:
-        return
+        return 0,"0"
+    contigNames = root.xpath(f"""/root/contig[@besthit="True"][virushit[@stitle = '{virus}']]/@name""")
+    for contigName in contigNames:
+        contigs = root.xpath(f"""/root/contig[@besthit="True" and @name = '{contigName}']/virushit[@stitle = '{virus}']""")
+        features = []
+        contigLength = int(contigs[0].xpath("""./../@name""")[0].split('_')[3])
+        for contig in contigs:
+            qstart = int(contig.xpath("""./qstart/text()""")[0])
+            qend = int(contig.xpath("""./qend/text()""")[0])
+            sstart = int(contig.xpath("""./sstart/text()""")[0])
+            send = int(contig.xpath("""./send/text()""")[0])
+            evalue = contig.xpath("""./evalue/text()""")[0]
+            bitscore = contig.xpath("""./bitscore/text()""")[0]
+            pident = contig.xpath("""./pident/text()""")[0]
+            stitle = contig.xpath("""./@stitle""")[0]
+            seqid = contig.xpath("""./@seqid""")[0][3:-1]
+            #print(seqid)
+            length = abs(sstart - send) + 1
+            if send > sstart:
+                strandStr = '+'
+            else:
+                strandStr = '-'
 
-    contigLength = int(contig.xpath("""./../@name""")[0].split('_')[3])
-
-    qstart = int(contig.xpath("""./qstart/text()""")[0])
-    qend = int(contig.xpath("""./qend/text()""")[0])
-    sstart = int(contig.xpath("""./sstart/text()""")[0])
-    send = int(contig.xpath("""./send/text()""")[0])
-    evalue = contig.xpath("""./evalue/text()""")[0]
-    bitscore = contig.xpath("""./bitscore/text()""")[0]
-    pident = contig.xpath("""./pident/text()""")[0]
-    stitle = contig.xpath("""./@stitle""")[0]
-    seqid = contig.xpath("""./@seqid""")[0][3:-1]
-    #print(seqid)
-    length = abs(sstart - send) + 1
-    if send > sstart:
-        strandStr = '+'
-    else:
-        strandStr = '-'
-
-    if qend > qstart:
-        strand = 1
-    else:
-        strand = -1
-    gf = GraphicFeature(start=qstart, end=qend, strand=strand, thickness=thickness, linewidth=0,
-                                           color='#ff0000', fontdict = {'size': labelFontSize},
-                                           label = stitle.lstrip('|') + ' ' + str(sstart) + '-' + str(send) + ' (' + str(length) + ' bp; ' + str(pident) + '%)')  #; ' + str(evalue) + ')')
-    features.append(gf)
-
-    hitsLeft = contig.xpath('./../vectorhitleft')
-    hitsRight = contig.xpath('./../vectorhitright')
-    hitsOverlap = contig.xpath('./../vectorhitoverlap')
-    flanks = contig.xpath('./../flanks')[0]
-    hitsDone = []
-    if matches:
-        matches = flanks.xpath('./match')
-        if len(matches) > 0:
-            matchCount = 1
-            for match in matches[:matchNum]:
-                for hits, attribName in [(hitsLeft, 'leftid'), (hitsRight, 'rightid')]:
-                    for v in hits:
-                        if v.attrib['id'] == match.attrib[attribName]:
-                            hitsDone.append(v.attrib['id'])
-                            qstart = int(v.find('qstart').text)
-                            qend = int(v.find('qend').text)
-                            if qend > qstart:
-                                strand = 1
-                            else:
-                                strand = -1
-                            sstart = int(v.find('sstart').text)
-                            send = int(v.find('send').text)
-                            if send > sstart:
-                                strandStr = '+'
-                            else:
-                                strandStr = '-'
-                            seqid = v.attrib['seqid']
-                            if seqid in chromNames:
-                                seqid = chromNames[seqid]
-                            elif seqid[:8] == 'NW_01873':
-                                seqid = 'Scaffold ' + seqid[8:12]
-                            features.append(GraphicFeature(start=qstart, end=qend, strand=strand, thickness=thickness, linewidth=0,
-                                                       color='#009051', fontdict = {'size': labelFontSize},
-                                                       label = 'M' + str(matchCount) + ': ' + seqid + ' {0:,}-{1:,} '.format(sstart, send) + '(' + strandStr + ')'))
-                            break
-                matchCount += 1
-    if inv:
-        inversions = flanks.findall('inversion')
-        if len(inversions) > 0:
-            matchCount = 1
-            for match in inversions[:invNum]:
-                for hits, attribName in [(hitsLeft, 'leftid'), (hitsRight, 'rightid')]:
-                    for v in hits:
-                        if v.attrib['id'] == match.attrib[attribName]:
-                            hitsDone.append(v.attrib['id'])
-                            qstart = int(v.find('qstart').text)
-                            qend = int(v.find('qend').text)
-                            if qend > qstart:
-                                strand = 1
-                            else:
-                                strand = -1
-                            sstart = int(v.find('sstart').text)
-                            send = int(v.find('send').text)
-                            if send > sstart:
-                                strandStr = '+'
-                            else:
-                                strandStr = '-'
-                            seqid = v.attrib['seqid']
-                            if seqid in chromNames:
-                                seqid = chromNames[seqid]
-                            elif seqid[:8] == 'NW_01873':
-                                seqid = 'Scaffold ' + seqid[8:12]
-                            features.append(GraphicFeature(start=qstart, end=qend, strand=strand, thickness=thickness, linewidth=0,
-                                                       color='indigo', fontdict = {'size': labelFontSize},
-                                                       label = 'I' + str(matchCount) + ': ' + seqid + ' {0:,}-{1:,} '.format(sstart, send) + '(' + strandStr + ')'))
-                            break
-                matchCount += 1
-    aaCoverage = [0] * contigLength
-    record = GraphicRecord(sequence_length = contigLength, features = features)
-
-    fig, (ax1, ax2) = pyplot.subplots(2, 1, sharex = True, figsize = (10, 6), gridspec_kw = {'height_ratios': [5, 1]})
-
-    record.plot(max_label_length = 80, ax = ax1, with_ruler = False)
-    ax2.fill_between(range(contigLength), aaCoverage, step = 'mid', alpha = 0.3)
-    ax2.tick_params(axis='both', which='major', labelsize=axesFontSize)
-    ax2.set_ylim(bottom = 0, top = max(aaCoverage + [1]))
-    ax2.set_yticks([0, max(aaCoverage + [1]) // 2, max(aaCoverage + [1])])
-    ax2.set_ylabel('Aa hits', fontsize = axesFontSize)
-
-    # pp = PdfPages('/Volumes/Users/udoh_t1/summer21/d5'+ '.pdf')
-    # pp.savefig()
-    # pp.close()
-
-    buf = io.BytesIO()
-    pyplot.savefig(buf, format='png')
-    pyplot.close()
-    data = base64.b64encode(buf.getbuffer()).decode('utf8')
-    return f"""data:image/png;base64,{data}"""
+            if qend > qstart:
+                strand = 1
+            else:
+                strand = -1
+            gf = GraphicFeature(start=qstart, end=qend, strand=strand, thickness=thickness, linewidth=0,
+                                                   color='#ff0000', fontdict = {'size': labelFontSize},
+                                                   label = stitle.lstrip('|') + ' ' + str(sstart) + '-' + str(send) + ' (' + str(length) + ' bp; ' + str(pident) + '%)')  #; ' + str(evalue) + ')')
+            features.append(gf)
 
 
+        hitsLeft = contig.xpath('./../vectorhitleft')
+        hitsRight = contig.xpath('./../vectorhitright')
+        hitsOverlap = contig.xpath('./../vectorhitoverlap')
+        vqstart = int(contig.xpath('./../virushit/qstart/text()')[0])
+        vqend = int(contig.xpath('./../virushit/qend/text()')[-1])
+        flanks = contig.xpath('./../flanks')[0]
+        hitsDone = []
+        if matchBool:
+            matches = flanks.xpath('./match')
+
+            if len(matches) > 0:
+                matchCount = 1
+                for match in matches[:matchNum]:
+                    for hits, attribName in [(hitsLeft, 'leftid'), (hitsRight, 'rightid')]:
+                        for v in hits:
+                            if v.attrib['id'] == match.attrib[attribName]:
+                                hitsDone.append(v.attrib['id'])
+                                qstart = int(v.find('qstart').text)
+                                qend = int(v.find('qend').text)
+                                if qend > qstart:
+                                    strand = 1
+                                else:
+                                    strand = -1
+                                sstart = int(v.find('sstart').text)
+                                send = int(v.find('send').text)
+                                if send > sstart:
+                                    strandStr = '+'
+                                else:
+                                    strandStr = '-'
+                                seqid = v.attrib['seqid']
+                                if seqid in chromNames:
+                                    seqid = chromNames[seqid]
+                                elif seqid[:8] == 'NW_01873':
+                                    seqid = 'Scaffold ' + seqid[8:12]
+                                if attribName == 'leftid':
+                                    distance = vqstart - qend
+                                else:
+                                    distance = qstart - vqend
+                                features.append(GraphicFeature(start=qstart, end=qend, strand=strand, thickness=thickness, linewidth=0,
+                                                           color='#009051', fontdict = {'size': labelFontSize},
+                                                           label = 'M' + str(matchCount) + ': ' + seqid + ' {0:,}-{1:,} '.format(sstart, send) + '(' + strandStr + '), Dist: ' + str(distance) + ' bp'))
+                                break
+                    matchCount += 1
+        if inv:
+            inversions = flanks.findall('inversion')
+            if len(inversions) > 0:
+                matchCount = 1
+                for match in inversions[:invNum]:
+                    for hits, attribName in [(hitsLeft, 'leftid'), (hitsRight, 'rightid')]:
+                        for v in hits:
+                            if v.attrib['id'] == match.attrib[attribName]:
+                                hitsDone.append(v.attrib['id'])
+                                qstart = int(v.find('qstart').text)
+                                qend = int(v.find('qend').text)
+                                if qend > qstart:
+                                    strand = 1
+                                else:
+                                    strand = -1
+                                sstart = int(v.find('sstart').text)
+                                send = int(v.find('send').text)
+                                if send > sstart:
+                                    strandStr = '+'
+                                else:
+                                    strandStr = '-'
+                                seqid = v.attrib['seqid']
+                                if seqid in chromNames:
+                                    seqid = chromNames[seqid]
+                                elif seqid[:8] == 'NW_01873':
+                                    seqid = 'Scaffold ' + seqid[8:12]
+                                if attribName == 'leftid':
+                                    distance = vqstart - qend
+                                else:
+                                    distance = qstart - vqend
+                                features.append(GraphicFeature(start=qstart, end=qend, strand=strand, thickness=thickness, linewidth=0,
+                                                           color='indigo', fontdict = {'size': labelFontSize},
+                                                           label = 'I' + str(matchCount) + ': ' + seqid + ' {0:,}-{1:,} '.format(sstart, send) + '(' + strandStr + '), Dist: ' + str(distance) + ' bp'))
+                                break
+                    matchCount += 1
+        aaCoverage = [0] * contigLength
+        for hits in (hitsLeft, hitsRight, hitsOverlap):
+            if len(hits) > 0:
+                hitsDict = {}  # consolidate query hit: [subject hits]
+                for v in hits:
+                    pos = (v.find('qstart').text, v.find('qend').text)
+                    for x in range(int(pos[0]), int(pos[1])):
+                        aaCoverage[x] += 1
+                    if v.attrib['id'] in hitsDone:
+                        continue
+
+                    if pos not in hitsDict:
+                        hitsDict[pos] = [(v.find('sstart').text, v.find('send').text, v.attrib['seqid'])] #, featureString)]
+                    else:
+                        hitsDict[pos].append((v.find('sstart').text, v.find('send').text, v.attrib['seqid'])) #, featureString))
+                posSort = list(hitsDict.keys())
+                if hits != hitsRight:
+                    posSort.sort(key = lambda pos: int(pos[1]), reverse = True)  # closest first
+                else:
+                    posSort.sort(key = lambda pos: int(pos[0]))  # closest first
+                if (matchBool == False and inv == False) or (len(matches) == 0 and len(inversions) == 0):
+                    for q in posSort[:max(0, FLANK_DRAW_LIMIT - len(matches) - len(inversions))]:
+                        qstart = int(q[0])
+                        qend = int(q[1])
+                        if qend > qstart:
+                            strand = 1
+                        else:
+                            strand = -1
+                        s = hitsDict[q][0]
+                        sstart = int(s[0])
+                        send = int(s[1])
+                        if send > sstart:
+                            strandStr = '+'
+                        else:
+                            strandStr = '-'
+                        seqid = s[2]
+                        if seqid in chromNames:
+                            seqid = chromNames[seqid]
+                        elif seqid[:8] == 'NW_01873':
+                            seqid = 'Scaffold ' + seqid[8:12]
+                        if hits == hitsOverlap:
+                            color = '#00ff00'
+                        else:
+                            color = '#0000ff'
+                        if hits == hitsLeft:
+                            distance = vqstart - qend
+                        else:
+                            distance = qstart - vqend
+                        features.append(GraphicFeature(start=qstart, end=qend, strand=strand, thickness=thickness, linewidth=0,
+                                                   color=color, fontdict = {'size': labelFontSize},
+                                                   label = seqid + ' {0:,}-{1:,} '.format(sstart, send) + '(' + strandStr + '), Dist: ' + str(distance) + ' bp'))
+        record = GraphicRecord(sequence_length = contigLength, features = features)
+
+        fig, (ax1, ax2) = pyplot.subplots(2, 1, sharex = True, figsize = (10, 6), gridspec_kw = {'height_ratios': [5, 1]})
+
+        record.plot(max_label_length = 80, ax = ax1, with_ruler = False)
+        ax2.fill_between(range(contigLength), aaCoverage, step = 'mid', alpha = 0.3)
+        ax2.tick_params(axis='both', which='major', labelsize=axesFontSize)
+        ax2.set_ylim(bottom = 0, top = max(aaCoverage + [1]))
+        ax2.set_yticks([0, max(aaCoverage + [1]) // 2, max(aaCoverage + [1])])
+        ax2.set_ylabel('Aa hits', fontsize = axesFontSize)
+
+        buf = io.BytesIO()
+        pyplot.savefig(buf, format='png')
+        pyplot.close()
+        data = base64.b64encode(buf.getbuffer()).decode('utf8')
+        picList.append(f"""data:image/png;base64,{data}""")
+
+    return len(picList), picList[cNum]
 
 
 if __name__ == '__main__':
