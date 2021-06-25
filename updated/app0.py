@@ -10,7 +10,7 @@ from pipeline_utilities import *
 from dash.dependencies import Input, Output
 import matplotlib
 matplotlib.use('Agg')
-
+import math
 #import dash_design_kit as ddk
 #import dash_daq as daq
 
@@ -89,33 +89,40 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
     html.Br(),
 
     html.Div ([dcc.Dropdown( id='countries-dropdown',
-                            options=[{'label': k, 'value': k} for k in all_regions.keys()],value='Angola',placeholder = 'Select a region',)],
+                            options=[{'label': k, 'value': k} for k in all_regions.keys()],value='USA',placeholder = 'Select a region',)],
     style = {'width':'20%', 'display': 'inline-block'},
     ),
 
-    html.Div([dcc.Dropdown(id='numbers-dropdown', value = '2', placeholder = 'Select a num'),],
+    html.Div([dcc.Dropdown(id='numbers-dropdown', value = '10', placeholder = 'Select a num'),],
     style = {'width':'20%', 'display': 'inline-block'},),
 
-    html.Div([dcc.Dropdown(id='family-dropdown', options = [{'label': k, 'value': k} for k in vFam.keys()],value ='Orthomyxoviridae', placeholder = 'Select a family')], style = {'width': '30%', 'display': 'inline-block'}),
+    html.Div([dcc.Dropdown(id='family-dropdown', options = [{'label': k, 'value': k} for k in vFam.keys()],value ='Arenaviridae', placeholder = 'Select a family')], style = {'width': '30%', 'display': 'inline-block'}),
 
-    html.Div([dcc.Dropdown(id='virus-dropdown', value = 'Wuhan Mosquito Virus 6',
+    html.Div([dcc.Dropdown(id='virus-dropdown', value = 'Lassa mammarenavirus',
     placeholder = 'Select a virus'),],
     style = {'width':'30%', 'display': 'inline-block'}),
 
     html.Hr(),
 
+    #html.Div([html.Div([dbc.Form([checklist])], style = { 'display': 'inline-block'}),
 
-    html.Div([html.Div([dbc.Form([checklist])], style = { 'display': 'inline-block'}),
+    html.Div([html.P('Number of matches and inversions', style = {'display':'inline-block'}),
+                html.P("Choose a contig number", style = {'display':'inline-block', "margin-left": "250px"}),
+                html.P("Choose an image number", style = {'display':'inline-block', "margin-left": "30px"})],
+            style = {'display':'inline-block'}
+                ),
 
+    html.Div([
+                dcc.Input(id='num-matches', type ='number', placeholder = 'Number of matches',
+                min=0, max = 5, value = 1),
+                dcc.Input(id='num-inv', type ='number', placeholder = 'Number of inv',
+                min=0, max = 5, value = 0, style={"margin-left": "15px"}),
 
-    html.Div([dbc.Row(dcc.Input(id='num-matches', type ='number', placeholder = 'Number of matches',
-                min=0, max = 5, value = 0),),
-            dbc.Row(dcc.Input(id='num-inv', type ='number', placeholder = 'Number of inv',
-                min=0, max = 5, value = 0),),],
-            style = {'width':'30%', 'display': 'inline-block'})]),
-    html.Hr(),
+                dcc.Input(id = 'contig-num', type='number', min=1, max = 0,value=1, style={"margin-left": "80px"}) ,
 
-    html.Div ([html.P("Choose a contig number"), dcc.Input(id = 'contig-num', type='number', min=1, max = 0,value=1)]),
+                dcc.Input(id = 'image-num', type='number', min=1, max = 5, value=1, style={"margin-left": "15px"}),],
+
+            ),
 
     html.Img(id = 'trial')
 
@@ -150,39 +157,45 @@ def set_virus_value(available_options):
 @app.callback(
     Output('contig-num', 'max'),
     Output('trial', 'src'), # src attribute
+    Output('image-num', 'max'),
     [dash.dependencies.Input('countries-dropdown', 'value'),
     dash.dependencies.Input('numbers-dropdown', 'value'),
     dash.dependencies.Input('virus-dropdown', 'value'),
-    dash.dependencies.Input('match-inv-input', 'value'),
+    #dash.dependencies.Input('match-inv-input', 'value'),
     dash.dependencies.Input('num-matches', 'value'),
     dash.dependencies.Input('num-inv', 'value'),
-    dash.dependencies.Input('contig-num', 'value')
+    dash.dependencies.Input('contig-num', 'value'),
+    dash.dependencies.Input('image-num', 'value')
     ])
 
 
-def drawContig(spec, specNum, virus, matchInv, matchNum, invNum, cNum):
+def drawContig(spec, specNum, virus, matchNum, invNum, cNum, imageNum):
     cNum = int(cNum)-1
-    if (matchInv) == 0:
-        matchBool = False
-        inv = False
-    elif sum(matchInv) == 1:
-        matchBool = True
-        inv = False
-    elif sum(matchInv) == 2:
-        matchBool = False
-        inv = True
-    else:
-        matchBool = True
-        inv = True
+    imageNum = imageNum-1
+    # if (matchInv) == 0:
+    #     matchBool = False
+    #     inv = False
+    # elif sum(matchInv) == 1:
+    #     matchBool = True
+    #     inv = False
+    # elif sum(matchInv) == 2:
+    #     matchBool = False
+    #     inv = True
+    # else:
+    #     matchBool = True
+    #     inv = True
 
     dir = label2Specimen[(spec,int(specNum))]
     pathN = '/Volumes/Data2/specimens/'+ dir + '/results/xml/' + dir +'_hits.xml'
 
+    totalMatches = []
     picList = []
     matches = []
     inversions = []
+    totalMatch = 0
+    totalInv = 0
 
-    FLANK_DRAW_LIMIT = 5
+    FLANK_DRAW_LIMIT = 3
     chromNames = {'NC_035107.1': 'Chr1', 'NC_035108.1': 'Chr2', 'NC_035109.1': 'Chr3'}
 
     labelFontSize = 6
@@ -234,12 +247,13 @@ def drawContig(spec, specNum, virus, matchInv, matchNum, invNum, cNum):
         vqend = int(contig.xpath('./../virushit/qend/text()')[-1])
         flanks = contig.xpath('./../flanks')[0]
         hitsDone = []
-        if matchBool:
+        if matchNum > 0:
             matches = flanks.xpath('./match')
-
+            totalMatch = math.ceil(len(matches)/matchNum)
+            #print(totalMatch)
             if len(matches) > 0:
-                matchCount = 1
-                for match in matches[:matchNum]:
+                matchCount = matchNum*imageNum +1
+                for match in matches[imageNum*matchNum : imageNum*matchNum + matchNum]:
                     for hits, attribName in [(hitsLeft, 'leftid'), (hitsRight, 'rightid')]:
                         for v in hits:
                             if v.attrib['id'] == match.attrib[attribName]:
@@ -270,11 +284,12 @@ def drawContig(spec, specNum, virus, matchInv, matchNum, invNum, cNum):
                                                            label = 'M' + str(matchCount) + ': ' + seqid + ' {0:,}-{1:,} '.format(sstart, send) + '(' + strandStr + '), Dist: ' + str(distance) + ' bp'))
                                 break
                     matchCount += 1
-        if inv:
+        if invNum > 0:
             inversions = flanks.findall('inversion')
+            totalInv = math.ceil(len(inversions)/invNum)
             if len(inversions) > 0:
-                matchCount = 1
-                for match in inversions[:invNum]:
+                matchCount = invNum*imageNum +1
+                for match in inversions[invNum*imageNum : invNum*imageNum+ invNum]:
                     for hits, attribName in [(hitsLeft, 'leftid'), (hitsRight, 'rightid')]:
                         for v in hits:
                             if v.attrib['id'] == match.attrib[attribName]:
@@ -305,6 +320,8 @@ def drawContig(spec, specNum, virus, matchInv, matchNum, invNum, cNum):
                                                            label = 'I' + str(matchCount) + ': ' + seqid + ' {0:,}-{1:,} '.format(sstart, send) + '(' + strandStr + '), Dist: ' + str(distance) + ' bp'))
                                 break
                     matchCount += 1
+
+        totalMatches.append(max(totalMatch, totalInv))
         aaCoverage = [0] * contigLength
         for hits in (hitsLeft, hitsRight, hitsOverlap):
             if len(hits) > 0:
@@ -325,8 +342,8 @@ def drawContig(spec, specNum, virus, matchInv, matchNum, invNum, cNum):
                     posSort.sort(key = lambda pos: int(pos[1]), reverse = True)  # closest first
                 else:
                     posSort.sort(key = lambda pos: int(pos[0]))  # closest first
-                if (matchBool == False and inv == False) or (len(matches) == 0 and len(inversions) == 0):
-                    for q in posSort[:max(0, FLANK_DRAW_LIMIT - len(matches) - len(inversions))]:
+                if len(matches) == 0 and len(inversions) == 0:
+                    for q in posSort[:FLANK_DRAW_LIMIT]:
                         qstart = int(q[0])
                         qend = int(q[1])
                         if qend > qstart:
@@ -373,7 +390,7 @@ def drawContig(spec, specNum, virus, matchInv, matchNum, invNum, cNum):
         data = base64.b64encode(buf.getbuffer()).decode('utf8')
         picList.append(f"""data:image/png;base64,{data}""")
 
-    return len(picList), picList[cNum]
+    return len(picList), picList[cNum], totalMatches[cNum]
 
 
 if __name__ == '__main__':
