@@ -176,6 +176,9 @@ def searchiTrees(seqid, start, end):
     
     if start > end:
         start, end = end, start
+        
+    start -= FEATURE_SEARCH_DIST
+    end += FEATURE_SEARCH_DIST
     
     if iTrees[seqid][start:end] is None:
         return []

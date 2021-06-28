@@ -497,8 +497,10 @@ def getHits(dirName): #, maxFlankingHits):
                         after.append(index)
                     else:  # as >= vs and ae <= ve or as <= vs and ae >= ve
                         overlap.append(index)  # aedes hit completely overlaps or is contained in virus hit
+                        if aedes_qstart < virus_qstart and aedes_qend >= virus_qend:
+                            doesOverlap = True
 
-                doesOverlap = sum([iv.length() for iv in virusIntervalsNotInRef]) <= (1 - OVERLAP_FRACTION) * virusIntervalsLength
+                doesOverlap = doesOverlap or (sum([iv.length() for iv in virusIntervalsNotInRef]) <= (1 - OVERLAP_FRACTION) * virusIntervalsLength)
                                         
             contigTree.attrib['inreference'] = str(doesOverlap)
             
@@ -1037,8 +1039,8 @@ def writeSummaryTable(fileName, viralHits, viralHits0, viralHits1, viralHits2, a
                     for p in qpos:
                         length += abs(hitDict[p][1] - hitDict[p][0]) + 1
                         s.extend([hitDict[p][0], hitDict[p][1]])
-                    if s[0] > s[-1]:
-                        s = s[::-1]
+#                    if s[0] > s[-1]:
+#                        s = s[::-1]
                     if (specimen in viralHits0) and (hit in viralHits0[specimen]):  # overlapping vector hit
                         s.append(3)
                     elif (specimen in viralHits2) and (hit in viralHits2[specimen]):
@@ -1098,9 +1100,11 @@ def consolidateAll():
     viralHits = {}    # all together
     allHits = []    
     viralSeqs = {}
+    viralSeqStrings = {}
+    viralSeqPositions = {}
     refSeqs = {}
     pIdents = {}
-    insertSites = {}
+#    insertSites = {}
     
     xmlFiles = []
     specimensPath = Path(SPECIMENS_DIR)
@@ -1128,6 +1132,8 @@ def consolidateAll():
         virus_fasta = open(str(seqPath / (specimen + '_hits_aligned.fasta')), 'w')
         virus_fasta_percontig = open(str(seqPath / (specimen + '_hits_unaligned.fasta')), 'w')
 
+        contigs = SeqIO.index(str(file.parent.parent.parent / 'results/scaffolds/scaffolds.fasta'), 'fasta')
+
         # Parse XML tree.
         
         tree = ET.parse(str(file))
@@ -1151,18 +1157,22 @@ def consolidateAll():
             
             if (seqid, stitle) not in viralSeqs:
                 viralSeqs[(seqid, stitle)] = {}
+                viralSeqStrings[(seqid, stitle)] = {}
+                viralSeqPositions[(seqid, stitle)] = {}
                 refSeqs[(seqid, stitle)] = {}
                 pIdents[(seqid, stitle)] = {}
-                insertSites[(seqid, stitle)] = {}
+#                insertSites[(seqid, stitle)] = {}
             if specimen not in viralSeqs[(seqid, stitle)]:
                 viralSeqs[(seqid, stitle)][specimen] = {}
+                viralSeqStrings[(seqid, stitle)][specimen] = {}
+                viralSeqPositions[(seqid, stitle)][specimen] = {}
                 refSeqs[(seqid, stitle)][specimen] = {}
                 pIdents[(seqid, stitle)][specimen] = {}
-                insertSites[(seqid, stitle)][specimen] = {}
+#                insertSites[(seqid, stitle)][specimen] = {}
             viralSeqs[(seqid, stitle)][specimen][contigName] = {}
             refSeqs[(seqid, stitle)][specimen][contigName] = {}
             pIdents[(seqid, stitle)][specimen][contigName] = {}
-            insertSites[(seqid, stitle)][specimen][contigName] = {}
+#            insertSites[(seqid, stitle)][specimen][contigName] = {}
             for v in contig.findall('virushit'):
                 hit[(int(v.find('qstart').text), int(v.find('qend').text))] = (int(v.find('sstart').text), int(v.find('send').text))
                 viralSeqs[(seqid, stitle)][specimen][contigName][(int(v.find('sstart').text), int(v.find('send').text))] = v.find('qseq').text
@@ -1173,71 +1183,70 @@ def consolidateAll():
                 virus_fasta.write('>' + seqid + '_' + stitle.replace(' ', '-') + '_' + v.find('sstart').text + '-' + v.find('send').text + '_(reference)\n')
                 virus_fasta.write(v.find('sseq').text + '\n')
         
-            qpos = list(hit.keys())
+            qpos = list(hit.keys())  # list of (qstart, qend) tuples
             qpos.sort()
-            combinedSeq = ''
-            sposString = ''
-            revSeq = hit[qpos[0]][0] > hit[qpos[0]][1]  # reverse complement if first hit is reversed
-            for qse in qpos:
-                combinedSeq += viralSeqs[(seqid, stitle)][specimen][contigName][hit[qse]].replace('-', '')  # remove gaps
-                if revSeq:
-                    sposString = str(hit[qse][1]) + '-' + str(hit[qse][0]) + ',' + sposString
-                else:
-                    sposString += str(hit[qse][0]) + '-' + str(hit[qse][1]) + ','
-            virus_fasta_percontig.write('>' + seqid + '_' + stitle.replace(' ', '-') + '_' + sposString[:-1] + '\n')
-            if revSeq:
-                combinedSeq = reverseComplement(combinedSeq)
-            virus_fasta_percontig.write(combinedSeq + '\n') 
+            viralSeqStrings[(seqid, stitle)][specimen][contigName] = str(contigs[contigName.split('__')[0]].seq)[qpos[0][0]-1:qpos[-1][1]] # getContig(str(file.parent.parent.parent), contigName.split('__')[0], qpos[0][0], qpos[-1][1])
+            sstart1, send1 = hit[qpos[0]]
+            if (len(hit) == 1) and (sstart1 > send1):   # if not a mosaic hit, take rev comp as necessary
+                viralSeqStrings[(seqid, stitle)][specimen][contigName] = reverseComplement(viralSeqStrings[(seqid, stitle)][specimen][contigName])
+                viralSeqPositions[(seqid, stitle)][specimen][contigName] = str(send1) + '-' + str(sstart1)
+            else:
+                sposString = ''
+                for (qstart, qend) in qpos:
+                    sposString += str(hit[(qstart, qend)][0]) + '-' + str(hit[(qstart, qend)][1]) + ','
+                viralSeqPositions[(seqid, stitle)][specimen][contigName] = sposString[:-1]
+            virus_fasta_percontig.write('>' + seqid + '_' + stitle.replace(' ', '-') + '_' + viralSeqPositions[(seqid, stitle)][specimen][contigName] + '\n')
+            virus_fasta_percontig.write(viralSeqStrings[(seqid, stitle)][specimen][contigName] + '\n')
 
-            recordedIDs = []
-            insertSites[(seqid, stitle)][specimen][contigName]['match'] = []
-            flanks = contig.find('flanks')
+#             recordedIDs = []
+#             insertSites[(seqid, stitle)][specimen][contigName]['match'] = []
+#             flanks = contig.find('flanks')
             vectorHitsLeft = contig.findall('vectorhitleft')
             vectorHitsRight = contig.findall('vectorhitright')
-            for match in flanks.findall('match'):
-                recordedIDs.append(match.attrib['leftid'])
-                recordedIDs.append(match.attrib['rightid'])
-                for v in vectorHitsLeft:
-                    if v.attrib['id'] == match.attrib['leftid']:
-                        matchLeft = int(v.find('send').text)
-                        break
-                for v in vectorHitsRight:
-                    if v.attrib['id'] == match.attrib['rightid']:
-                        insertSites[(seqid, stitle)][specimen][contigName]['match'].append((v.attrib['seqid'], (matchLeft, int(v.find('sstart').text))))
-                        break
-                        
-            insertSites[(seqid, stitle)][specimen][contigName]['inversion'] = []
-            for match in flanks.findall('inversion'):
-                recordedIDs.append(match.attrib['leftid'])
-                recordedIDs.append(match.attrib['rightid'])
-                for v in vectorHitsLeft:
-                    if v.attrib['id'] == match.attrib['leftid']:
-                        matchLeft = int(v.find('send').text)
-                        break
-                for v in vectorHitsRight:
-                    if v.attrib['id'] == match.attrib['rightid']:
-                        insertSites[(seqid, stitle)][specimen][contigName]['inversion'].append((v.attrib['seqid'], (matchLeft, int(v.find('sstart').text))))
-                        break
-        
-            insertSites[(seqid, stitle)][specimen][contigName]['left'] = []
-            for v in vectorHitsLeft:
-                if v.attrib['id'] not in recordedIDs:
-                    aedes_qstart = int(v.find('qstart').text)
-                    aedes_qend = int(v.find('qend').text)
-                    virus_qstart = qpos[0][0]
-                    virus_qend = qpos[-1][1]
-                    if (-ALLOWED_OVERLAP <= virus_qstart - aedes_qend <= MAX_FLANKING_DISTANCE) or (-ALLOWED_OVERLAP <= aedes_qstart - virus_qend <= MAX_FLANKING_DISTANCE): # or (len(aedes_qseq) >= MIN_FLANKING_HIT_LENGTH):
-                        insertSites[(seqid, stitle)][specimen][contigName]['left'].append((v.attrib['seqid'], int(v.find('send').text)))
-                
-            insertSites[(seqid, stitle)][specimen][contigName]['right'] = []
-            for v in vectorHitsRight:
-                if v.attrib['id'] not in recordedIDs:
-                    aedes_qstart = int(v.find('qstart').text)
-                    aedes_qend = int(v.find('qend').text)
-                    virus_qstart = qpos[0][0]
-                    virus_qend = qpos[-1][1]
-                    if (-ALLOWED_OVERLAP <= virus_qstart - aedes_qend <= MAX_FLANKING_DISTANCE) or (-ALLOWED_OVERLAP <= aedes_qstart - virus_qend <= MAX_FLANKING_DISTANCE): # or (len(aedes_qseq) >= MIN_FLANKING_HIT_LENGTH):
-                        insertSites[(seqid, stitle)][specimen][contigName]['right'].append((v.attrib['seqid'], int(v.find('sstart').text)))
+#             for match in flanks.findall('match'):
+#                 recordedIDs.append(match.attrib['leftid'])
+#                 recordedIDs.append(match.attrib['rightid'])
+#                 for v in vectorHitsLeft:
+#                     if v.attrib['id'] == match.attrib['leftid']:
+#                         matchLeft = int(v.find('send').text)
+#                         break
+#                 for v in vectorHitsRight:
+#                     if v.attrib['id'] == match.attrib['rightid']:
+#                         insertSites[(seqid, stitle)][specimen][contigName]['match'].append((v.attrib['seqid'], (matchLeft, int(v.find('sstart').text))))
+#                         break
+#                         
+#             insertSites[(seqid, stitle)][specimen][contigName]['inversion'] = []
+#             for match in flanks.findall('inversion'):
+#                 recordedIDs.append(match.attrib['leftid'])
+#                 recordedIDs.append(match.attrib['rightid'])
+#                 for v in vectorHitsLeft:
+#                     if v.attrib['id'] == match.attrib['leftid']:
+#                         matchLeft = int(v.find('send').text)
+#                         break
+#                 for v in vectorHitsRight:
+#                     if v.attrib['id'] == match.attrib['rightid']:
+#                         insertSites[(seqid, stitle)][specimen][contigName]['inversion'].append((v.attrib['seqid'], (matchLeft, int(v.find('sstart').text))))
+#                         break
+#         
+#             insertSites[(seqid, stitle)][specimen][contigName]['left'] = []
+#             for v in vectorHitsLeft:
+#                 if v.attrib['id'] not in recordedIDs:
+#                     aedes_qstart = int(v.find('qstart').text)
+#                     aedes_qend = int(v.find('qend').text)
+#                     virus_qstart = qpos[0][0]
+#                     virus_qend = qpos[-1][1]
+#                     if (-ALLOWED_OVERLAP <= virus_qstart - aedes_qend <= MAX_FLANKING_DISTANCE) or (-ALLOWED_OVERLAP <= aedes_qstart - virus_qend <= MAX_FLANKING_DISTANCE): # or (len(aedes_qseq) >= MIN_FLANKING_HIT_LENGTH):
+#                         insertSites[(seqid, stitle)][specimen][contigName]['left'].append((v.attrib['seqid'], int(v.find('send').text)))
+#                 
+#             insertSites[(seqid, stitle)][specimen][contigName]['right'] = []
+#             for v in vectorHitsRight:
+#                 if v.attrib['id'] not in recordedIDs:
+#                     aedes_qstart = int(v.find('qstart').text)
+#                     aedes_qend = int(v.find('qend').text)
+#                     virus_qstart = qpos[0][0]
+#                     virus_qend = qpos[-1][1]
+#                     if (-ALLOWED_OVERLAP <= virus_qstart - aedes_qend <= MAX_FLANKING_DISTANCE) or (-ALLOWED_OVERLAP <= aedes_qstart - virus_qend <= MAX_FLANKING_DISTANCE): # or (len(aedes_qseq) >= MIN_FLANKING_HIT_LENGTH):
+#                         insertSites[(seqid, stitle)][specimen][contigName]['right'].append((v.attrib['seqid'], int(v.find('sstart').text)))
         
             numVectorHits = len(vectorHitsLeft + vectorHitsRight)
         
@@ -1372,7 +1381,7 @@ def consolidateAll():
             posSpecimen = []
             for contigName in positions[(seqid, stitle)][specimen]:
                 posSpecimen.extend(positions[(seqid, stitle)][specimen][contigName])
-            posSpecimen.sort()
+#            posSpecimen.sort()
             posString = ''
             for start, end in posSpecimen:
                 posString += str(start) + '-' + str(end) + ','
@@ -1386,7 +1395,7 @@ def consolidateAll():
                     writelog('Sequence length error: ' + seqid + ', ' + specimen + ', ' + contigName + ' (length = ' + str(len(viralSeqs[(seqid, stitle)][specimen][contigName])) + ', should be ' + str(theLength) + ') - FIXED', True)
                     viralSeqs[(seqid, stitle)][specimen][contigName] = viralSeqs[(seqid, stitle)][specimen][contigName][:theLength]
                     
-                positions[(seqid, stitle)][specimen][contigName].sort()
+#                positions[(seqid, stitle)][specimen][contigName].sort()
                 posString = ''
                 for start, end in positions[(seqid, stitle)][specimen][contigName]:
                     posString += str(start) + '-' + str(end) + ','
@@ -1401,8 +1410,8 @@ def consolidateAll():
                 seqOutPerContig.write('>' + specimen + '_|_' + contigName + '_|_' + seqid + '_' + posString[:-1] + '_pident_' + '{:5.3f}'.format(pident) + '\n')
                 seqOutPerContig.write(viralSeqs[(seqid, stitle)][specimen][contigName] + '\n')
                 
-                seqOutPerContigUnaligned.write('>' + specimen + '_|_' + contigName + '_|_' + seqid + '_' + posString[:-1] + '_pident_' + '{:5.3f}'.format(pident) + '\n')
-                seqOutPerContigUnaligned.write(viralSeqs[(seqid, stitle)][specimen][contigName].replace('-', '') + '\n')
+                seqOutPerContigUnaligned.write('>' + specimen + '_|_' + contigName + '_|_' + seqid + '_' + viralSeqPositions[(seqid, stitle)][specimen][contigName] + '_pident_' + '{:5.3f}'.format(pident) + '\n')
+                seqOutPerContigUnaligned.write(viralSeqStrings[(seqid, stitle)][specimen][contigName] + '\n')
 
                 contigCount += 1
         seqOut.close()
@@ -1488,7 +1497,7 @@ def consolidateAll():
                 posSpecimen = []
                 for contigName in positions[(seqid, stitle)][specimen]:
                     posSpecimen.extend(positions[(seqid, stitle)][specimen][contigName])
-                posSpecimen.sort()
+#                posSpecimen.sort()
                 posString = ''
                 for start, end in posSpecimen:
                     posString += str(start) + '-' + str(end) + ','
@@ -1502,13 +1511,13 @@ def consolidateAll():
                     seqOut.write(('{:-<' + str(repLength) + '}').format(viralSeqsBySpecimen[(seqid, stitle)][specimen][addGaps:repLength]) + '\n')
                 contigCount = 1
                 for contigName in viralSeqs[(seqid, stitle)][specimen]:
-                    positions[(seqid, stitle)][specimen][contigName].sort()
+#                    positions[(seqid, stitle)][specimen][contigName].sort()
                     posString = ''
                     for start, end in positions[(seqid, stitle)][specimen][contigName]:
                         posString += str(start) + '-' + str(end) + ','
                     seqOutPerContig.write('>' + region + '_' + str(num) + '__contig' + str(contigCount) + '_' + seqid + '_' + posString[:-1] + '\n')
-                    seqOutPerContigUnaligned.write('>' + region + '_' + str(num) + '__contig' + str(contigCount) + '_' + seqid + '_' + posString[:-1] + '\n')
-                    seqOutPerContigUnaligned.write(viralSeqs[(seqid, stitle)][specimen][contigName].replace('-', '') + '\n')
+                    seqOutPerContigUnaligned.write('>' + region + '_' + str(num) + '__contig' + str(contigCount) + '_' + seqid + '_' + viralSeqPositions[(seqid, stitle)][specimen][contigName] + '\n')
+                    seqOutPerContigUnaligned.write(viralSeqStrings[(seqid, stitle)][specimen][contigName] + '\n')
                     if adjust > 0:
                         seqOutPerContig.write(('{:-<' + str(repLength) + '}').format('-' * addGaps + viralSeqs[(seqid, stitle)][specimen][contigName][:repLength-addGaps]) + '\n')
                     else:
@@ -1894,20 +1903,20 @@ def doIt(dirName, filenameBAM):
         if xmlFilename is not None:
             drawXML(xmlFilename)
             
-            if FIND_FEATURES:
-                makeIntervalTrees()
-                xmlFeaturesFilename = findFeaturesXML(xmlFilename)  #4 = get features
-                displayXML(xmlFeaturesFilename, True)
-                displayXML(xmlFeaturesFilename, False)
-                
-                # remove any old txt files
-                if Path(xmlFilename[:-4] + '.txt').exists():
-                    os.system('rm ' + xmlFilename[:-4] + '.txt')
-                if Path(xmlFilename[:-4] + '_short.txt').exists():
-                    os.system('rm ' + xmlFilename[:-4] + '_short.txt')
-            else:
-                displayXML(xmlFilename, True)
-                displayXML(xmlFilename, False)
+#             if FIND_FEATURES:
+#                 makeIntervalTrees()
+#                 xmlFeaturesFilename = findFeaturesXML(xmlFilename)  #4 = get features
+#                 displayXML(xmlFeaturesFilename, True)
+#                 displayXML(xmlFeaturesFilename, False)
+#                 
+#                 # remove any old txt files
+#                 if Path(xmlFilename[:-4] + '.txt').exists():
+#                     os.system('rm ' + xmlFilename[:-4] + '.txt')
+#                 if Path(xmlFilename[:-4] + '_short.txt').exists():
+#                     os.system('rm ' + xmlFilename[:-4] + '_short.txt')
+#             else:
+            displayXML(xmlFilename, True)
+            displayXML(xmlFilename, False)
         else:
             writelog('*** ' + str(Path(dirName).name) + ': no results found. ***', True)
     else:
@@ -1977,5 +1986,6 @@ def main():
     drawAll(False)
 #    drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)
     
-main()
-#consolidateAll()
+#main()
+RESULTS_DIR = ROOT_DIR + 'results20k_2/'
+consolidateAll()

@@ -157,4 +157,5 @@ def makeHeatMap(fileName, xlabels):
     figFileName = Path(fileName).name[:-4] + '.pdf'
     fig.savefig(figFileName)
     
-makeHeatMap('/Volumes/Data2/temp_files/flav_freq.csv', ['CFAV 1', 'CFAV 2', 'CFAV 3', 'CFAV 4', 'CFAV 5', 'XAF 1', 'XAF 2', 'Merc', 'Zika', 'BVDV 1', 'BVDV 2', 'CF'])
+#makeHeatMap('/Volumes/Data2/temp_files/flav_freq.csv', ['CFAV 1', 'CFAV 2', 'CFAV 3', 'CFAV 4', 'CFAV 5', 'XAF 1', 'XAF 2', 'Merc', 'Zika', 'BVDV 1', 'BVDV 2', 'CF'])
+makeHeatMap('/Volumes/Data2/temp_files/toti_freq.csv', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])

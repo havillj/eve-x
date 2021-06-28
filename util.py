@@ -44,7 +44,7 @@ LOGFILE_PATH = Path(ROOT_DIR) / LOGFILE_NAME
 MIN_PIDENT = 80
 EVALUE_V = 1e-10
 EVALUE_A = 1e-10
-ALLOWED_OVERLAP = 20           # bp aedes hits may overlap ends of virus hits or each other
+ALLOWED_OVERLAP = 30           # bp aedes hits may overlap ends of virus hits or each other
 OVERLAP_FRACTION = 0.95        # if this fraction of a hit overlaps with an Aedes hit, it is considered to be present in the reference genome
 MAX_FLANK_DISTANCE = 20000
 COMPLEXITY_K = 3
@@ -56,7 +56,8 @@ MAX_FLANKING_DISTANCE = 200
 #MAX_FLANKING_HITS = 10
 FLANK_DRAW_LIMIT = 5
 FIND_FEATURES = True
-OMIT_EVES_IN_REFERENCE = True
+FEATURE_SEARCH_DIST = 10000
+OMIT_EVES_IN_REFERENCE = False
 BEST_HITS_ONLY = True
 DO_CLUSTERING = False
 MIN_K = 2
@@ -205,7 +206,7 @@ def getContig(dirName, contigName, start, end):
     return str(contigRecord.seq)[start - 1:end]  # account for 1-based indexing
         
 def main():
-    print(getContig('/Volumes/Data2/specimens/Paqueta-Brazil-18.LIN210A2144', 'NODE_31282_length_646_cov_2.050967', 260, 297))
+    print(getContig('/Volumes/Data2/specimens/Skukusa_South_Africa_07.LIN210A1745', 'NODE_5381_length_2024_cov_8.484848', 1, 2024))
     
 if __name__ == '__main__':
     main()

@@ -76,7 +76,7 @@ def drawFromFile(fileName, virusName):
 def drawEVEs(EVEs, virusName, title, openEnds = None):
 
     width = 10
-    height = 3
+    height = 4
     thickness = 10
     fontsize = 8
     
@@ -91,10 +91,10 @@ def drawEVEs(EVEs, virusName, title, openEnds = None):
         f.linewidth = 0.5
         f.fontdict = {'size': fontsize}
     
-    fig, ax = pyplot.subplots(len(EVEs) + 1, 1, sharex = False, sharey = False, figsize = (width, height), gridspec_kw = {'height_ratios': [6] + [1] * len(EVEs)})
+    fig, ax = pyplot.subplots(len(EVEs) + 1, 1, sharex = False, sharey = False, figsize = (width, height), gridspec_kw = {'height_ratios': [5] + [1] * len(EVEs)})
     virusRecord.plot(ax = ax[0], figure_width=width, with_ruler = True, max_line_length = 80, max_label_length = 80)
     x0, y0, w, h = ax[0].get_position().bounds
-    ax[0].set_position([x0, y0+h*0.2, w, h])
+#    ax[0].set_position([x0, y0+h*0.2, w, h])
     ax[0].tick_params(labelsize = fontsize)
 #    fig.suptitle(title, fontsize = fontsize, fontweight = 'bold', y = 0.9)
 #    fig.subplots_adjust(top = 0.99, bottom = 0.01, left = 0.18, right = 0.95)
@@ -108,17 +108,55 @@ def drawEVEs(EVEs, virusName, title, openEnds = None):
            
         record = GraphicRecord(features = features, sequence_length = virusRecord.sequence_length, feature_level_height = 0)
         record.plot(ax = ax[eveNum], figure_width=width, with_ruler = False)
-        ax[eveNum].text(0, -0.3, eveName + ' ', horizontalalignment = 'right', fontdict = {'size': fontsize})
+        ax[eveNum].text(0, -0.15, eveName + ' ', horizontalalignment = 'right', fontdict = {'size': fontsize})
+#        x0, y0, w, h = ax[eveNum].get_position().bounds
+#        ax[eveNum].set_position([x0, y0-h*0.3*eveNum+0.1, w, h])
+
         eveNum += 1
         
     fig.savefig(title + '.pdf')
     
-XAF_EVEs = [('XAF EVE 1', 2035, 2686),
-             ('XAF EVE 2', 90, 255)]
+FCTV_EVE = [('FCTV EVE', 1209, 1500, 2084, 2386)]
              
-openEnds = [(True, True), (True, True)]
+openEnds = [(False, False, False, False)]
              
-drawEVEs(XAF_EVEs, 'NC_034017.1', 'XAF EVEs', openEnds)
+drawEVEs(FCTV_EVE, 'MT498830.1', 'FCTV EVE', openEnds)
+
+
+# AATV_EVEs = [('AATV EVE 1', 2659, 2827),
+#              ('AATV EVE 2', 446, 1798),
+#              ('AATV EVE 3', 2505, 3019, 4103, 4352, 422, 1711),
+#              ('AATV EVE 4', 2308, 3308),
+#              ('AATV EVE 5', 1097, 1798, 1997, 2602),
+#              ('AATV EVE 6', 422, 1843, 2069, 2915),
+#              ('AATV EVE 7', 2590, 2829),
+#              ('AATV EVE 8', 2069, 2706),
+#              ('AATV EVE 9', 1553, 1774),
+#              ('AATV EVE 10', 2848, 3195)]
+#              
+# openEnds = [(True, True), 
+#             (True, True), 
+#             (False, False, False, False, False, False), 
+#             (True, True), 
+#             (False, False, False, False), 
+#             (False, False, False, False), 
+#             (True, True),
+#             (True, True),
+#             (True, True),
+#             (True, True)]
+#              
+# drawEVEs(AATV_EVEs, 'NC_035674.1', 'AATV EVEs', openEnds)
+
+# ZV_EVE = [('ZV EVE', 10839, 11155)]
+# openEnds = [(True, True)]
+# drawEVEs(ZV_EVE, 'KY766069.1', 'ZV EVE', openEnds)
+    
+# XAF_EVEs = [('XAF EVE 1', 2035, 2686),
+#              ('XAF EVE 2', 90, 255)]
+#              
+# openEnds = [(True, True), (True, True)]
+#              
+# drawEVEs(XAF_EVEs, 'NC_034017.1', 'XAF EVEs', openEnds)
     
 # CFAV_EVEs = [('CFAV EVE 1', 1816, 4663, 739, 1094, 4953, 6564),
 #              ('CFAV EVE 2', 1925, 2498, 4559, 5270),
@@ -440,7 +478,7 @@ def getVirusSequences2(virusACC, vStart, vEnd, flankLength, outFileName, sort = 
     
 #getVirusSequences2('MF176251.1', 148, 966, 100, 'ortho_flanks', 'right')
 #getVirusSequences2('NC_001564.2', 0, None, 0, 'cfav', 'left')
-getVirusSequences2('MK775204.1', 8330, 8610, 100, 'bvdv_flanks', 'left')
+#getVirusSequences2('MK775204.1', 8330, 8610, 100, 'bvdv_flanks', 'left')
 #exit()
 
 ###############################################################################

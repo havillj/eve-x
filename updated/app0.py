@@ -301,4 +301,4 @@ def drawContig(spec, specNum, virus, matchInv, matchNum, invNum):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=False)
