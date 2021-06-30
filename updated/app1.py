@@ -127,10 +127,10 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
     html.Hr(),
 
 
-    html.Div([
+    html.Div(id = 'buttons', children = [
           dbc.Button('prev', id='left-scroll',n_clicks=0),
           dbc.Button('next', id = 'right-scroll', n_clicks = 0),
-          ]),
+          ], style = {'display':'none'}),
 
     html.Img(id='contigDiagram')
 
@@ -227,10 +227,7 @@ def set_virus_value(available_options):
     dash.dependencies.State('numbers-dropdown', 'value'),
     dash.dependencies.State('virus-dropdown', 'value'),
     #dash.dependencies.State('contig-num', 'value'),
-
-    ], prevent_initial_call = True
-    )
-
+    ], prevent_initial_call = True)
 def pickContig(state, cNum, spec, specNum, virus):
 
     cNum -= 1
@@ -263,6 +260,7 @@ def pickContig(state, cNum, spec, specNum, virus):
     Output('contigDiagram', 'src'),
     Output('left-scroll', 'disabled'),
     Output('right-scroll', 'disabled'),
+    Output('buttons', 'style'),
     [dash.dependencies.Input('result', 'children'),
     dash.dependencies.Input('contig-num', 'value'),
     dash.dependencies.Input('matches-num', 'value'),
@@ -295,7 +293,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
         pyplot.close()
         data = base64.b64encode(buf.getbuffer()).decode('utf8')
         pic = f"""data:image/png;base64,{data}"""
-        return pic, True, True
+        return pic, True, True, {'display': 'block'}
     chromNames = {'NC_035107.1': 'Chr1', 'NC_035108.1': 'Chr2', 'NC_035109.1': 'Chr3'}
     totalMatch = 0
     totalInv = 0
@@ -535,7 +533,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
     else:
         out = [False, False]
 
-    return pic, out[0], out[1]
+    return pic, out[0], out[1], {'display': 'block'}
 
 if __name__ == '__main__':
     app.run_server(debug=True)
