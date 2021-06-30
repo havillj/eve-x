@@ -127,12 +127,15 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
     html.Hr(),
 
 
+    html.Div([html.Img(id = 'contigDiagram')],
+    style = {'textAlign': 'center'}),
+
+    html.Br(),
+
     html.Div(id = 'buttons', children = [
           dbc.Button('prev', id='left-scroll',n_clicks=0),
           dbc.Button('next', id = 'right-scroll', n_clicks = 0),
           ], style = {'display':'none'}),
-
-    html.Img(id='contigDiagram')
 
 
 ])
@@ -293,7 +296,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
         pyplot.close()
         data = base64.b64encode(buf.getbuffer()).decode('utf8')
         pic = f"""data:image/png;base64,{data}"""
-        return pic, True, True, {'display': 'block'}
+        return pic, True, True, {'display': 'block', 'textAlign': 'center'}
     chromNames = {'NC_035107.1': 'Chr1', 'NC_035108.1': 'Chr2', 'NC_035109.1': 'Chr3'}
     totalMatch = 0
     totalInv = 0
@@ -533,7 +536,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
     else:
         out = [False, False]
 
-    return pic, out[0], out[1], {'display': 'block'}
+    return pic, out[0], out[1], {'display': 'block', 'textAlign': 'center'}
 
 if __name__ == '__main__':
     app.run_server(debug=True)
