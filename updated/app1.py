@@ -11,6 +11,7 @@ from dash.dependencies import Input, Output, State
 import matplotlib
 matplotlib.use('Agg')
 import math
+from PIL import Image
 #import dash_design_kit as ddk
 #import dash_daq as daq
 
@@ -361,8 +362,36 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
           dbc.Button('next', id = 'right-scroll', n_clicks = 0),
           ], style = {'display':'none'}),
 
+    html.P(id="download-seq", style = {'display': 'none'}),
+
+    html.Button("Download Sequence", id="btn_txt", style = {'display': 'none'}),
+    dcc.Download(id='download-text'),
+
+
 
 ])
+
+@app.callback(
+    Output("download-text", "data"),
+    Input("btn_txt", "n_clicks"),
+    State('download-seq','children'),
+    State('countries-dropdown', 'value'),
+    State('numbers-dropdown', 'value'),
+    prevent_initial_call=True,
+)
+def func(n_clicks, seq, country, num):
+    contig = seq.split("|")[0]
+    seqname = f"{country}_{num}_{contig}.fasta"
+    return dict(content=seq, filename=seqname)
+
+@app.callback(
+    Output('btn_txt', 'style'),
+    Input('submit','n_clicks'),
+    prevent_initial_call=True,
+)
+
+def hideDownload(n_clicks):
+    return {'display' : 'inline-block'}
 
 
 @app.callback(
@@ -521,6 +550,7 @@ def pickContig(state, cNum, spec, specNum, virus):
     Output('left-scroll', 'disabled'),
     Output('right-scroll', 'disabled'),
     Output('buttons', 'style'),
+    Output('download-seq', 'children'),
     [dash.dependencies.Input('result', 'children'),
     dash.dependencies.Input('contig-num', 'value'),
     dash.dependencies.Input('matches-num', 'value'),
@@ -580,10 +610,13 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
 
     virusHits = contig.xpath("""./virushit""")
     features = []
+    newline = "\n"
+    sequence =  ""
     contigLength = int(contig.xpath("""./@name""")[0].split('_')[3])
     for virusHit in virusHits:
         qstart = int(virusHit.xpath("""./qstart/text()""")[0])
         qend = int(virusHit.xpath("""./qend/text()""")[0])
+        qseq = virusHit.xpath("""./qseq/text()""")[0]
         sstart = int(virusHit.xpath("""./sstart/text()""")[0])
         send = int(virusHit.xpath("""./send/text()""")[0])
         evalue = virusHit.xpath("""./evalue/text()""")[0]
@@ -605,6 +638,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
                                                color='#ff0000', fontdict = {'size': labelFontSize},
                                                label = stitle.lstrip('|') + ' ' + str(sstart) + '-' + str(send) + ' (' + str(length) + ' bp; ' + str(pident) + '%)')  #; ' + str(evalue) + ')')
         features.append(gf)
+        sequence +=  f">{node}|{qstart}-{qend}{newline}{qseq}{newline}"
 
     caption = f"{virus} insertion sites in {spec} {specNum} ({node})"
     hitsLeft = contig.xpath('./vectorhitleft')
@@ -779,7 +813,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
     fig.text(.5, .01, caption, ha='center')
 
     buf = io.BytesIO()
-    pyplot.savefig(buf, format='png')
+    pyplot.savefig(buf, format='jpg')
     pyplot.close()
     data = base64.b64encode(buf.getbuffer()).decode('utf8')
     pic = f"""data:image/png;base64,{data}"""
@@ -796,7 +830,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
     else:
         out = [False, False]
 
-    return pic, out[0], out[1], {'display': 'block', 'textAlign': 'center'}
+    return pic, out[0], out[1], {'display': 'block', 'textAlign': 'center'}, sequence
 
 if __name__ == '__main__':
     app.run_server(debug=True)
