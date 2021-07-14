@@ -618,7 +618,17 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
     l = flanks.xpath("./*/@leftid")
 
     hitsDone = l + r
-    print("done: ", hitsDone)
+
+    rCount = 0
+    lCount = 0
+    for x in contig.xpath("./vectorhitleft/@id"):
+        if x not in l:
+            lCount += 1
+    for y in contig.xpath("./vectorhitright/@id"):
+        if y not in r:
+            rCount += 1
+    print("l:", lCount, 'r:', rCount)
+    #print("done: ", hitsDone)
 
     matches = flanks.xpath('./match')
 
@@ -698,8 +708,6 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
 
 
 
-
-
     aaCoverage = [0] * contigLength
     for hits in (hitsLeft, hitsRight): #, hitsOverlap):
         if len(hits) > 0:
@@ -721,11 +729,11 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
                 if hits == hitsLeft:
                     flankNum = leftFlanks
                     if leftFlanks != 0:
-                        totalLeft = math.ceil(len(hitsLeft)/leftFlanks)
+                        totalLeft = math.ceil(lCount/leftFlanks)
                 elif hits == hitsRight:
                     flankNum = rightFlanks
                     if rightFlanks != 0:
-                        totalRight = math.ceil(len(hitsRight)/rightFlanks)
+                        totalRight = math.ceil(rCount/rightFlanks)
 
                 for q in hitsDict[flankNum*imageNum : flankNum*imageNum + flankNum]:
                     qstart = int(q[1][0])
