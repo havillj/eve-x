@@ -177,11 +177,11 @@ def searchiTrees(seqid, start, end):
     if start > end:
         start, end = end, start
         
-    start -= FEATURE_SEARCH_DIST
-    end += FEATURE_SEARCH_DIST
+#    start -= FEATURE_SEARCH_DIST
+#    end += FEATURE_SEARCH_DIST
     
     if iTrees[seqid][start:end] is None:
         return []
     else:
-        return [(iv.data.type, iv.data.id, str(iv.data.location)) for iv in iTrees[seqid][start:end]]
+        return [(iv.data.type, iv.data.id, iv.data.location) for iv in iTrees[seqid][start:end]]
     

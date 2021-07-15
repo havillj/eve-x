@@ -28,6 +28,8 @@ class MyCustomTranslator(BiopythonTranslator):
             return feature.qualifiers['product'][0]
         elif feature.type == "CDS":
             return feature.qualifiers['product'][0]
+        elif feature.type == "misc_feature":
+            return feature.qualifiers['note'][0].split(' due to mutation')[0]
         else:
             return BiopythonTranslator.compute_feature_label(self, feature)
 
@@ -76,9 +78,9 @@ def drawFromFile(fileName, virusName):
 def drawEVEs(EVEs, virusName, title, openEnds = None):
 
     width = 10
-    height = 4
+    height = 5
     thickness = 10
-    fontsize = 8
+    fontsize = 6
     
     if openEnds is None:
         openEnds = []
@@ -91,7 +93,7 @@ def drawEVEs(EVEs, virusName, title, openEnds = None):
         f.linewidth = 0.5
         f.fontdict = {'size': fontsize}
     
-    fig, ax = pyplot.subplots(len(EVEs) + 1, 1, sharex = False, sharey = False, figsize = (width, height), gridspec_kw = {'height_ratios': [5] + [1] * len(EVEs)})
+    fig, ax = pyplot.subplots(len(EVEs) + 1, 1, sharex = False, sharey = False, figsize = (width, height), gridspec_kw = {'height_ratios': [3] + [1,1,2,1,1,1]}) #[1] * len(EVEs)})  #[1,1,2,1,1]})
     virusRecord.plot(ax = ax[0], figure_width=width, with_ruler = True, max_line_length = 80, max_label_length = 80)
     x0, y0, w, h = ax[0].get_position().bounds
 #    ax[0].set_position([x0, y0+h*0.2, w, h])
@@ -106,21 +108,23 @@ def drawEVEs(EVEs, virusName, title, openEnds = None):
         for index in range(1, len(eve), 2):
             features.append(GraphicFeature(start=eve[index], end=eve[index+1], strand=1, color='#5555FF', label = None, thickness = 10, linewidth = 0, open_left = open[index - 1], open_right = open[index]))
            
-        record = GraphicRecord(features = features, sequence_length = virusRecord.sequence_length, feature_level_height = 0)
+        record = GraphicRecord(features = features, sequence_length = virusRecord.sequence_length)#, feature_level_height = 0)
         record.plot(ax = ax[eveNum], figure_width=width, with_ruler = False)
         ax[eveNum].text(0, -0.15, eveName + ' ', horizontalalignment = 'right', fontdict = {'size': fontsize})
-#        x0, y0, w, h = ax[eveNum].get_position().bounds
-#        ax[eveNum].set_position([x0, y0-h*0.3*eveNum+0.1, w, h])
+        x0, y0, w, h0 = ax[1].get_position().bounds
+        x0, y0, w, h = ax[eveNum].get_position().bounds
+        if eveNum > 1:
+            ax[eveNum].set_position([x0, y0+h0*0.4*(eveNum-1), w, h])
 
         eveNum += 1
         
     fig.savefig(title + '.pdf')
     
-FCTV_EVE = [('FCTV EVE', 1209, 1500, 2084, 2386)]
-             
-openEnds = [(False, False, False, False)]
-             
-drawEVEs(FCTV_EVE, 'MT498830.1', 'FCTV EVE', openEnds)
+# FCTV_EVE = [('FCTV EVE', 1209, 1500, 2084, 2386)]
+#              
+# openEnds = [(False, False, False, False)]
+#              
+# drawEVEs(FCTV_EVE, 'MT498830.1', 'FCTV EVE', openEnds)
 
 
 # AATV_EVEs = [('AATV EVE 1', 2659, 2827),
@@ -169,12 +173,20 @@ drawEVEs(FCTV_EVE, 'MT498830.1', 'FCTV EVE', openEnds)
 #              
 # drawEVEs(CFAV_EVEs, 'NC_001564.2', 'CFAV EVEs', openEnds)
 
-# XIN_EVEs = [('XIN EVE 1', 10, 1401),
-#              ('XIN EVE 2', 3775, 5551),
-#              ('XIN EVE 3', 4286, 5551)]
-# openEnds = [(False, False), (False, True), (True, True)]
+XIN_EVEs = [('XIN EVE 1', 10, 900),
+            ('XIN EVE 2', 647, 1393),
+            ('XIN EVE 3', 1230, 608, 602, 1262),
+             ('XIN EVE 4', 3775, 4891),
+             ('XIN EVE 5', 4290, 5551),
+             ('XIN EVE 6', 351, 1401)]
+openEnds = [(True, True), (True, True), (False, False, False, False), (True, True), (True, True), (True, True)]
+             
+drawEVEs(XIN_EVEs, 'MH037149.1', 'XIN EVEs', openEnds)
+
+# XIN2_EVE = [('XIN EVE 6', 455, 1505)]
+# openEnds = [(True, True)]
 #              
-# drawEVEs(XIN_EVEs, openEnds, 'MH037149.1', 'XIN EVEs')
+# drawEVEs(XIN2_EVE, 'MH237595.1', 'XIN2 EVEs', openEnds)
 
 # ORTH_EVEs = [('ORTH EVE 1', 148, 824),
 #              ('ORTH EVE 2', 455, 966)]

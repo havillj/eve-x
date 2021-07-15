@@ -206,7 +206,7 @@ def getContig(dirName, contigName, start, end):
     return str(contigRecord.seq)[start - 1:end]  # account for 1-based indexing
         
 def main():
-    print(getContig('/Volumes/Data2/specimens/Skukusa_South_Africa_07.LIN210A1745', 'NODE_5381_length_2024_cov_8.484848', 1, 2024))
+    pass
     
 if __name__ == '__main__':
     main()

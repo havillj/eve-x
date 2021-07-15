@@ -6,16 +6,12 @@ from lxml import etree
 from matplotlib.backends.backend_pdf import PdfPages
 import io
 import base64
-from pipeline_utilities import *
+from dna_features_viewer import GraphicFeature, GraphicRecord
 from dash.dependencies import Input, Output, State
 import matplotlib
+import matplotlib.pyplot as pyplot
 matplotlib.use('Agg')
 import math
-#import dash_design_kit as ddk
-#import dash_daq as daq
-
-
-
 import dash_bootstrap_components as dbc
 
 
@@ -272,48 +268,18 @@ label2Specimen = {('Mexico', 1): 'Amacuzac-Mexico-1.LIN210A1618', ('Mexico', 10)
 regions = list(all_regions.keys())
 regions.sort()
 
-checklist = dbc.FormGroup(
-    [
-        dbc.Label("Matches or Inversions"),
-        dbc.Checklist(
-            options=[
-                {"label": "Matches", "value": 1},
-                {"label": "Inversions", "value": 2},
-
-            ],
-            value=[1],
-            id="match-inv-input",
-        ),
-    ]
-)
-
 app = dash.Dash()
-colors = {
-    'background': '#FFFFFF',
-    'text': '#111111'
-}
-app.layout = html.Div(style={'backgroundColor': colors['background']}, children=[
-    html.H1(
-        children='EVEs In Aedes aegypti Mosquitoes',
-        style={
-            'textAlign': 'center',
-            'color': colors['text']
-        }
-    ),
-    html.Div(style={
-        'textAlign': 'center',
-        'color': colors['text']},
-        children=['Contig Diagrams for EVE in AAa genome',
-        #html.Figure(figure1)
-        ]
-    ),
+
+app.layout = html.Div(children=[
+    html.H1(children='EVEs In Aedes aegypti Mosquitoes',style={'textAlign': 'center'}),
+
+    html.Div(style={'textAlign': 'center'}, children=['Contig Diagrams for EVE in AAa genome',]),
 
     html.P("To enable more convenient appraisal of individual contigs, EVE produces diagrams of the viral hits in each contig (only the best hit). To see different contigs containing viral hits, select a specimen and virus.",
      style = {'textAlign': 'center'}),
     html.Br(),
 
-    html.Div ([dcc.Dropdown( id='countries-dropdown',placeholder = 'Select a region',options=[{'label': k, 'value': k} for k in all_regions.keys()])], style = {'width':'20%', 'display': 'inline-block'},
-    ),
+    html.Div ([dcc.Dropdown( id='countries-dropdown',placeholder = 'Select a region',options=[{'label': k, 'value': k} for k in all_regions.keys()])], style = {'width':'20%', 'display': 'inline-block'},),
 
     html.Div([dcc.Dropdown(id='numbers-dropdown', placeholder = 'Select a num'),], style = {'width':'20%', 'display': 'inline-block'},),
 
@@ -321,17 +287,13 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
 
     html.Div([dcc.Dropdown(id='virus-dropdown', placeholder = 'Select a virus'),], style = {'width':'30%', 'display': 'inline-block'}),
 
-
-
-
-    html.Br(),
+    html.Br(),html.Br(),
 
     dbc.Button('submit', id = 'submit', n_clicks = 0),
 
     html.P(id = 'result', style = {'display':'none'}),
 
-    html.Br(),
-    html.Br(),
+    html.Br(), html.Br(),
 
     html.Div(id = 'contig-div', children = [html.P(id = 'choose-contig', style = {'font-size':14}),
             dcc.Input(id='contig-num', type ='number', placeholder = 'choose a contig', min=0, max = 5, value = 1),], style = {'display':'none'}),
@@ -350,83 +312,116 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
 
     html.Hr(),
 
-
-    html.Div([html.Img(id = 'contigDiagram')],
-    style = {'textAlign': 'center'}),
+    html.Div([html.Img(id = 'contigDiagram')], style = {'textAlign': 'center'}),
 
     html.Br(),
 
     html.Div(id = 'buttons', children = [
           dbc.Button('prev', id='left-scroll',n_clicks=0),
-          dbc.Button('next', id = 'right-scroll', n_clicks = 0),
-          ], style = {'display':'none'}),
+          dbc.Button('next', id = 'right-scroll', n_clicks = 0),],
+          style = {'display':'none'}),
+
+    html.P(id="download-seq", style = {'display': 'none'}),
+
+    html.Button("Download Sequence", id="btn_txt", style = {'display': 'none'}),
+
+    dcc.Download(id='download-text'),
 
 
 ])
-
+###############################################################################
 
 @app.callback(
-    dash.dependencies.Output('choose-matches', 'children'),
-    dash.dependencies.Output('match-div', 'style'),
-    dash.dependencies.Input('result', 'children'),
-    state = [dash.dependencies.State('matches-num', 'max')],
-    prevent_initial_call = True
-    )
+    Output("download-text", "data"),
+    Input("btn_txt", "n_clicks"),
+    State('download-seq','children'),
+    State('countries-dropdown', 'value'),
+    State('numbers-dropdown', 'value'),
+    prevent_initial_call=True,
+)
+def func(n_clicks, seq, country, num):
+    contig = seq.split("|")[0]
+    seqname = f"{country}_{num}_{contig}.fasta"
+    return dict(content=seq, filename=seqname)
 
+###############################################################################
+
+@app.callback(
+    Output('btn_txt', 'style'),
+    Input('submit','n_clicks'),
+    prevent_initial_call=True,
+)
+def hideDownload(n_clicks):
+    return {'display' : 'inline-block'}
+
+###############################################################################
+
+@app.callback(
+    Output('choose-matches', 'children'),
+    Output('match-div', 'style'),
+    Input('result', 'children'),
+    State('matches-num', 'max'),
+    prevent_initial_call = True
+)
 def set_matchNum_caption(submit, matches):
     return f"Choose number of matches (max: {matches})", {'display':'inline-block', "margin-left": "20px"}
 
-@app.callback(
-    dash.dependencies.Output('choose-inv', 'children'),
-    dash.dependencies.Output('inv-div', 'style'),
-    dash.dependencies.Input('result', 'children'),
-    state = [dash.dependencies.State('inv-num', 'max')],
-    prevent_initial_call = True
-    )
+###############################################################################
 
+@app.callback(
+    Output('choose-inv', 'children'),
+    Output('inv-div', 'style'),
+    Input('result', 'children'),
+    State('inv-num', 'max'),
+    prevent_initial_call = True
+)
 def set_invNum_caption(state, inv):
     return f"Choose number of inversions (max: {inv})", {'display':'inline-block', "margin-left": "20px"}
 
-@app.callback(
-    dash.dependencies.Output('choose-left', 'children'),
-    dash.dependencies.Output('left-div', 'style'),
-    dash.dependencies.Input('result', 'children'),
-    state = [dash.dependencies.State('left-num', 'max')],
-    prevent_initial_call = True
-    )
+###############################################################################
 
+@app.callback(
+    Output('choose-left', 'children'),
+    Output('left-div', 'style'),
+    Input('result', 'children'),
+    State('left-num', 'max'),
+    prevent_initial_call = True
+)
 def set_leftNum_caption(state, left):
     return f"Choose number of left flanks (max: {left})", {'display':'inline-block', "margin-left": "20px"}
 
-@app.callback(
-    dash.dependencies.Output('choose-right', 'children'),
-    dash.dependencies.Output('right-div', 'style'),
-    dash.dependencies.Input('result', 'children'),
-    state = [dash.dependencies.State('right-num', 'max')],
-    prevent_initial_call = True
-    )
+###############################################################################
 
+@app.callback(
+    Output('choose-right', 'children'),
+    Output('right-div', 'style'),
+    Input('result', 'children'),
+    State('right-num', 'max'),
+    prevent_initial_call = True
+)
 def set_rightNum_caption(state, right):
     return f"Choose number of right flanks (max: {right})", {'display':'inline-block', "margin-left": "20px"}
 
-@app.callback(
-    dash.dependencies.Output('choose-contig', 'children'),
-    dash.dependencies.Output('contig-div', 'style'),
-    dash.dependencies.Input('result', 'children'),
-    state = [dash.dependencies.State('contig-num', 'max')],
-    prevent_initial_call = True
-    )
+###############################################################################
 
+@app.callback(
+    Output('choose-contig', 'children'),
+    Output('contig-div', 'style'),
+    Input('result', 'children'),
+    State('contig-num', 'max'),
+    prevent_initial_call = True
+)
 def set_contig_caption(state, contig_max):
     return f"Choose a contig number (max: {contig_max})", {'display':'inline-block'}
 
+###############################################################################
 
 @app.callback(
-    dash.dependencies.Output('family-dropdown', 'options'),
+    Output('family-dropdown', 'options'),
     Input('numbers-dropdown', 'value'),
     State('countries-dropdown', 'value'),
-
-    prevent_initial_call = True)
+    prevent_initial_call = True
+)
 def set_family_options(specNum, spec):
     options = []
     for fam in vFam:
@@ -435,18 +430,17 @@ def set_family_options(specNum, spec):
             if vir in specVirus[(spec, specNum)]:
                 options.append(fam)
                 break
-    print(options)
     return [{'label': i, 'value': i} for i in options]
 
+###############################################################################
 
 @app.callback(
-    dash.dependencies.Output('virus-dropdown', 'options'),
-    dash.dependencies.Input('family-dropdown', 'value'),
+    Output('virus-dropdown', 'options'),
+    Input('family-dropdown', 'value'),
     State('countries-dropdown', 'value'),
     State('numbers-dropdown', 'value'),
-
-    prevent_initial_call = True)
-
+    prevent_initial_call = True
+)
 def set_virus_options(family, spec, specNum):
     options = []
     for v in vFam[family]:
@@ -454,19 +448,25 @@ def set_virus_options(family, spec, specNum):
             options.append(v)
     return [{'label': i, 'value': i} for i in options]
 
+###############################################################################
 
 @app.callback(
-    dash.dependencies.Output('numbers-dropdown', 'options'),
-    dash.dependencies.Input('countries-dropdown', 'value'), prevent_initial_call = True)
+    Output('numbers-dropdown', 'options'),
+    Input('countries-dropdown', 'value'), prevent_initial_call = True
+)
 def set_cities_options(selected_country):
     return [{'label': i, 'value': i} for i in all_regions[selected_country]]
 
+###############################################################################
 
 @app.callback(
-    dash.dependencies.Output('virus-dropdown', 'value'),
-    dash.dependencies.Input('virus-dropdown', 'options'), prevent_initial_call = True)
+    Output('virus-dropdown', 'value'),
+    Input('virus-dropdown', 'options'), prevent_initial_call = True
+)
 def set_virus_value(available_options):
     return available_options[0]['value']
+
+###############################################################################
 
 @app.callback(
     Output('contig-num', 'max'),
@@ -475,13 +475,13 @@ def set_virus_value(available_options):
     Output('inv-num', 'max'),
     Output('left-num', 'max'),
     Output('right-num', 'max'),
-    [dash.dependencies.Input('submit', 'n_clicks'),
-    dash.dependencies.Input('contig-num', 'value')],
-    state = [dash.dependencies.State('countries-dropdown', 'value'),
-    dash.dependencies.State('numbers-dropdown', 'value'),
-    dash.dependencies.State('virus-dropdown', 'value'),
-    #dash.dependencies.State('contig-num', 'value'),
-    ], prevent_initial_call = True)
+    Input('submit', 'n_clicks'),
+    Input('contig-num', 'value'),
+    State('countries-dropdown', 'value'),
+    State('numbers-dropdown', 'value'),
+    State('virus-dropdown', 'value'),
+    prevent_initial_call = True
+)
 def pickContig(state, cNum, spec, specNum, virus):
 
     cNum -= 1
@@ -502,41 +502,47 @@ def pickContig(state, cNum, spec, specNum, virus):
     caption = contigNames[cNum]#f"{virus} insertion sites in {spec} {specNum} ({contigName})"
     nodeL.append(caption)
     flanks = contig.xpath('./flanks')[0]
+    r = flanks.xpath("./*/@rightid")
+    l = flanks.xpath("./*/@leftid")
     matches = len(flanks.xpath('./match'))
     inversions = len(flanks.findall('inversion'))
-    hitsLeft = len(contig.xpath('./vectorhitleft'))
-    hitsRight = len(contig.xpath('./vectorhitright'))
-    #print(matches, inversions, hitsLeft, hitsRight)
+    hitsLeft = contig.xpath('./vectorhitleft/@id')
+    hitsRight = contig.xpath('./vectorhitright/@id')
+    rCount = 0
+    lCount = 0
+    for x in hitsLeft:
+        if x not in l:
+            lCount += 1
+    for y in hitsRight:
+        if y not in r:
+            rCount += 1
+    return len(contigNames), pathN, matches, inversions, lCount, rCount
 
-    return len(contigNames), pathN, matches, inversions, hitsLeft, hitsRight
+###############################################################################
 
 @app.callback(
     Output('contigDiagram', 'src'),
     Output('left-scroll', 'disabled'),
     Output('right-scroll', 'disabled'),
     Output('buttons', 'style'),
-    [dash.dependencies.Input('result', 'children'),
-    dash.dependencies.Input('contig-num', 'value'),
-    dash.dependencies.Input('matches-num', 'value'),
-    dash.dependencies.Input('inv-num', 'value'),
-    dash.dependencies.Input('left-num', 'value'),
-    dash.dependencies.Input('right-num', 'value'),
-    dash.dependencies.Input('left-scroll', 'n_clicks'),
-    dash.dependencies.Input('right-scroll', 'n_clicks'),
-    ],
-    state =
-    [#dash.dependencies.State('result', 'children'),
-    #dash.dependencies.State('image-num', 'value'),
-    dash.dependencies.State('virus-dropdown', 'value'),
-    dash.dependencies.State('countries-dropdown', 'value'),
-    dash.dependencies.State('numbers-dropdown', 'value'),
+    Output('download-seq', 'children'),
+    Input('result', 'children'),
+    Input('contig-num', 'value'),
+    Input('matches-num', 'value'),
+    Input('inv-num', 'value'),
+    Input('left-num', 'value'),
+    Input('right-num', 'value'),
+    Input('left-scroll', 'n_clicks'),
+    Input('right-scroll', 'n_clicks'),
+    State('virus-dropdown', 'value'),
+    State('countries-dropdown', 'value'),
+    State('numbers-dropdown', 'value'),
     State('matches-num', 'max'),
     State('inv-num', 'max'),
     State('left-num', 'max'),
-    State('right-num', 'max')
-    ],
-     prevent_initial_call = True
-    )
+    State('right-num', 'max'),
+    prevent_initial_call = True
+)
 def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev, next, virus, spec, specNum, mMax, invMax, lMax, rMax):
 
     if path == "does not exist":
@@ -558,11 +564,9 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
     thickness = 12
 
     contigNum -= 1
-    #imageNum = 0
 
     imageNum = next - prev
-
-
+    flankNum = 0
 
     parser = etree.XMLParser(remove_blank_text=True)
     root = etree.parse(path, parser).getroot()
@@ -574,10 +578,13 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
 
     virusHits = contig.xpath("""./virushit""")
     features = []
+    newline = "\n"
+    sequence =  ""
     contigLength = int(contig.xpath("""./@name""")[0].split('_')[3])
     for virusHit in virusHits:
         qstart = int(virusHit.xpath("""./qstart/text()""")[0])
         qend = int(virusHit.xpath("""./qend/text()""")[0])
+        qseq = virusHit.xpath("""./qseq/text()""")[0]
         sstart = int(virusHit.xpath("""./sstart/text()""")[0])
         send = int(virusHit.xpath("""./send/text()""")[0])
         evalue = virusHit.xpath("""./evalue/text()""")[0]
@@ -585,7 +592,6 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
         pident = virusHit.xpath("""./pident/text()""")[0]
         stitle = virusHit.xpath("""./@stitle""")[0]
         seqid = virusHit.xpath("""./@seqid""")[0][3:-1]
-        #print(seqid)
         length = abs(sstart - send) + 1
         if send > sstart:
             strandStr = '+'
@@ -600,6 +606,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
                                                color='#ff0000', fontdict = {'size': labelFontSize},
                                                label = stitle.lstrip('|') + ' ' + str(sstart) + '-' + str(send) + ' (' + str(length) + ' bp; ' + str(pident) + '%)')  #; ' + str(evalue) + ')')
         features.append(gf)
+        sequence +=  f">{node}|{qstart}-{qend}{newline}{qseq}{newline}"
 
     caption = f"{virus} insertion sites in {spec} {specNum} ({node})"
     hitsLeft = contig.xpath('./vectorhitleft')
@@ -608,14 +615,25 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
     vqstart = int(contig.xpath('./virushit/qstart/text()')[0])
     vqend = int(contig.xpath('./virushit/qend/text()')[-1])
     flanks = contig.xpath('./flanks')[0]
-    hitsDone = []
+
+    r = flanks.xpath("./*/@rightid")
+    l = flanks.xpath("./*/@leftid")
+
+    hitsDone = l + r
+
+    rCount = 0
+    lCount = 0
+    for x in contig.xpath("./vectorhitleft/@id"):
+        if x not in l:
+            lCount += 1
+    for y in contig.xpath("./vectorhitright/@id"):
+        if y not in r:
+            rCount += 1
 
     matches = flanks.xpath('./match')
-    #numMatches.append(len(matches))
 
     if matchNum > 0:
         totalMatch = math.ceil(len(matches)/matchNum)
-        #print(totalMatch)
         if len(matches) > 0:
             matchCount = matchNum*imageNum +1
             for match in matches[imageNum*matchNum : imageNum*matchNum + matchNum]:
@@ -651,7 +669,6 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
                 matchCount += 1
 
     inversions = flanks.findall('inversion')
-    #numInv.append(len(inversions))
 
     if invNum > 0:
         totalInv = math.ceil(len(inversions)/invNum)
@@ -689,52 +706,43 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
                             break
                 matchCount += 1
 
-    #numLeft.append(len(hitsLeft))
-    #numRight.append(len(hitsRight))
+
 
     aaCoverage = [0] * contigLength
     for hits in (hitsLeft, hitsRight): #, hitsOverlap):
         if len(hits) > 0:
-            hitsDict = {}  # consolidate query hit: [subject hits]
+            hitsDict = []  # consolidate query hit: [subject hits]
+            countS = 0
             for v in hits:
                 pos = (v.find('qstart').text, v.find('qend').text)
                 for x in range(int(pos[0]), int(pos[1])):
                     aaCoverage[x] += 1
-                if v.attrib['id'] in hitsDone:
-                    continue
+                if v.attrib['id'] not in hitsDone:
+                    hitsDict.append((v.attrib['id'], pos, [v.find('sstart').text, v.find('send').text, v.attrib['seqid']]))
 
-                if pos not in hitsDict:
-                    hitsDict[pos] = [(v.find('sstart').text, v.find('send').text, v.attrib['seqid'])] #, featureString)]
-                else:
-                    hitsDict[pos].append((v.find('sstart').text, v.find('send').text, v.attrib['seqid'])) #, featureString))
-            posSort = list(hitsDict.keys())
             if hits != hitsRight:
-                posSort.sort(key = lambda pos: int(pos[1]), reverse = True)  # closest first
+                hitsDict.sort(key = lambda tup: tup[1][1], reverse = True)  # closest first
             else:
-                posSort.sort(key = lambda pos: int(pos[0]))  # closest first
-            #if len(matches) == 0 and len(inversions) == 0:
+                hitsDict.sort(key = lambda tup: tup[1][1])  # closest first
+
             if leftFlanks > 0 or rightFlanks > 0:
                 if hits == hitsLeft:
                     flankNum = leftFlanks
-                    if leftFlanks == 0:
-                        totalLeft = 0
-                    else:
-                        totalLeft = math.ceil(len(hitsLeft)/leftFlanks)
+                    if leftFlanks != 0:
+                        totalLeft = math.ceil(lCount/leftFlanks)
                 elif hits == hitsRight:
                     flankNum = rightFlanks
-                    if rightFlanks == 0:
-                        totalRight = 0
-                    else:
-                        totalRight = math.ceil(len(hitsRight)/rightFlanks)
+                    if rightFlanks != 0:
+                        totalRight = math.ceil(rCount/rightFlanks)
 
-                for q in posSort[flankNum*imageNum : flankNum*imageNum+ flankNum]:
-                    qstart = int(q[0])
-                    qend = int(q[1])
+                for q in hitsDict[flankNum*imageNum : flankNum*imageNum + flankNum]:
+                    qstart = int(q[1][0])
+                    qend = int(q[1][1])
                     if qend > qstart:
                         strand = 1
                     else:
                         strand = -1
-                    s = hitsDict[q][0]
+                    s = q[2]
                     sstart = int(s[0])
                     send = int(s[1])
                     if send > sstart:
@@ -759,6 +767,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
                                                label = seqid + ' {0:,}-{1:,} '.format(sstart, send) + '(' + strandStr + '), Dist: ' + str(distance) + ' bp'))
     record = GraphicRecord(sequence_length = contigLength, features = features)
 
+
     fig, (ax1, ax2) = pyplot.subplots(2, 1, sharex = True, figsize = (10, 6), gridspec_kw = {'height_ratios': [5, 1]})
 
     record.plot(max_label_length = 80, ax = ax1, with_ruler = False)
@@ -770,11 +779,10 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
     fig.text(.5, .01, caption, ha='center')
 
     buf = io.BytesIO()
-    pyplot.savefig(buf, format='png')
+    pyplot.savefig(buf, format='jpg')
     pyplot.close()
     data = base64.b64encode(buf.getbuffer()).decode('utf8')
     pic = f"""data:image/png;base64,{data}"""
-    #totalMatches.append(max(totalMatch, totalInv, totalLeft, totalRight))
 
     imgmax = max(totalMatch, totalInv, totalLeft, totalRight) - 1
 
@@ -787,7 +795,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
     else:
         out = [False, False]
 
-    return pic, out[0], out[1], {'display': 'block', 'textAlign': 'center'}
+    return pic, out[0], out[1], {'display': 'block', 'textAlign': 'center'}, sequence
 
 if __name__ == '__main__':
     app.run_server(debug=True)

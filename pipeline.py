@@ -1360,9 +1360,9 @@ def consolidateAll():
         if not Path(FAMILY_DIR).exists():
             os.system('mkdir ' + FAMILY_DIR)
         
-        seqOutFileName = str(Path(FAMILY_DIR) / ('sequences_' + seqid + '_per_specimen_aligned.fasta'))
-        seqOutPerContigFileName = str(Path(FAMILY_DIR) / ('sequences_' + seqid + '_per_contig_aligned.fasta'))
-        seqOutPerContigUnalignedFileName = str(Path(FAMILY_DIR) / ('sequences_' + seqid + '_per_contig_unaligned.fasta'))
+        seqOutFileName = str(Path(FAMILY_DIR) / (seqid + '_per_specimen_aligned.fasta'))
+        seqOutPerContigFileName = str(Path(FAMILY_DIR) / (seqid + '_per_contig_aligned.fasta'))
+        seqOutPerContigUnalignedFileName = str(Path(FAMILY_DIR) / (seqid + '_per_contig_unaligned.fasta'))
         seqOut = open(seqOutFileName, 'w')
         seqOutPerContig = open(seqOutPerContigFileName, 'w')
         seqOutPerContigUnaligned = open(seqOutPerContigUnalignedFileName, 'w')
@@ -1472,9 +1472,9 @@ def consolidateAll():
                     minCDSPos = min(minCDSPos, feature.location.start)
             startPositions[(seqid, stitle)] = minCDSPos
                     
-        seqOut = open(str(Path(FAMILY_DIR) / ('sequences_' + family + '_per_specimen_aligned.fasta')), 'w')
-        seqOutPerContig = open(str(Path(FAMILY_DIR) / ('sequences_' + family + '_per_contig_aligned.fasta')), 'w')
-        seqOutPerContigUnaligned = open(str(Path(FAMILY_DIR) / ('sequences_' + family + '_per_contig_unaligned.fasta')), 'w')
+        seqOut = open(str(Path(FAMILY_DIR) / (family + '_per_specimen_aligned.fasta')), 'w')
+        seqOutPerContig = open(str(Path(FAMILY_DIR) / (family + '_per_contig_aligned.fasta')), 'w')
+        seqOutPerContigUnaligned = open(str(Path(FAMILY_DIR) / (family + '_per_contig_unaligned.fasta')), 'w')
         
         seqOut.write('>' + repACC[0] + ' ' + repACC[1] + '\n')
         seqOut.write(viralSeqs[repACC][repACC[0]] + '\n')
@@ -1885,7 +1885,7 @@ def drawAll(separatePops = False):
                 fam = getFamily(acc)
                 fams[acc] = fam
                 addFamily(acc, fam)
-            drawVirus(acc, fams[acc], allVirusHits[acc], allSpecimens, separatePops, False, True, True, False)
+            drawVirus(acc, fams[acc], allVirusHits[acc], allSpecimens, separatePops, False, False, True, False)
 
 ###############################################################################
 

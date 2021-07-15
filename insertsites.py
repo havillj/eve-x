@@ -16,6 +16,15 @@ def removeSite(sites, posPair):
             return features
     return []
     
+def removeRuns(values):
+    newValues = []
+    prevValue = ''
+    for value in values:
+        if value != prevValue:
+            newValues.append(value)
+        prevValue = value
+    return newValues
+    
 def getFlanks(specimen, contigName, leftStart, leftEnd, rightStart, rightEnd):
     scaffoldsFilename = str(Path(SPECIMENS_DIR) / (specimen + '/results/scaffolds/scaffolds.fasta'))
     scaffoldRecords = SeqIO.index(scaffoldsFilename, 'fasta')
@@ -82,6 +91,8 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
                     qpos.sort()
                     virus_qstart = qpos[0][0]
                     virus_qend = qpos[-1][1]
+                    virus_sstart = hit[qpos[0]][0]
+                    virus_send = hit[qpos[-1]][1]
             elif not skip and element.tag == 'vectorhitleft':
                 vectorHitsLeft.append(element)
                 v = element
@@ -93,15 +104,15 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
                     send = int(v.find('send').text)
                     if sstart < send:
                         if FIND_FEATURES:
-                            site = (chrSeqID, send, searchiTrees(chrSeqID, send - FEATURE_SEARCH_DIST, send), virus_qstart - aedes_qend)
+                            site = (chrSeqID, send, searchiTrees(chrSeqID, send - FEATURE_SEARCH_DIST, send), virus_qstart - aedes_qend, (virus_sstart, virus_send))
                         else:
-                            site = (chrSeqID, send, [], virus_qstart - aedes_qend)
+                            site = (chrSeqID, send, [], virus_qstart - aedes_qend, (virus_sstart, virus_send))
                         insertSites[seqid][specimen][contigName]['left'].append(site)
                     else:  # this is actually a right flanking region
                         if FIND_FEATURES:
-                            site = (chrSeqID, send, searchiTrees(chrSeqID, send, send + FEATURE_SEARCH_DIST), virus_qstart - aedes_qend)
+                            site = (chrSeqID, send, searchiTrees(chrSeqID, send, send + FEATURE_SEARCH_DIST), virus_qstart - aedes_qend, (virus_send, virus_sstart))
                         else:
-                            site = (chrSeqID, send, [], virus_qstart - aedes_qend)
+                            site = (chrSeqID, send, [], virus_qstart - aedes_qend, (virus_send, virus_sstart))
                         insertSites[seqid][specimen][contigName]['right'].append(site)
             elif not skip and element.tag == 'vectorhitright':
                 vectorHitsRight.append(element)
@@ -114,15 +125,15 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
                     send = int(v.find('send').text)
                     if sstart < send:
                         if FIND_FEATURES:
-                            site = (chrSeqID, sstart, searchiTrees(chrSeqID, sstart, sstart + FEATURE_SEARCH_DIST), aedes_qstart - virus_qend)
+                            site = (chrSeqID, sstart, searchiTrees(chrSeqID, sstart, sstart + FEATURE_SEARCH_DIST), aedes_qstart - virus_qend, (virus_sstart, virus_send))
                         else:
-                            site = (chrSeqID, sstart, [], aedes_qstart - virus_qend)
+                            site = (chrSeqID, sstart, [], aedes_qstart - virus_qend, (virus_sstart, virus_send))
                         insertSites[seqid][specimen][contigName]['right'].append(site)
                     else:  # this is actually a left flanking region
                         if FIND_FEATURES:
-                            site = (chrSeqID, sstart, searchiTrees(chrSeqID, sstart - FEATURE_SEARCH_DIST, sstart), aedes_qstart - virus_qend)
+                            site = (chrSeqID, sstart, searchiTrees(chrSeqID, sstart - FEATURE_SEARCH_DIST, sstart), aedes_qstart - virus_qend, (virus_send, virus_sstart))
                         else:
-                            site = (chrSeqID, sstart, [], aedes_qstart - virus_qend)
+                            site = (chrSeqID, sstart, [], aedes_qstart - virus_qend, (virus_send, virus_sstart))
                         insertSites[seqid][specimen][contigName]['left'].append(site)
             elif not skip and element.tag == 'vectorhitoverlap':
                 v = element
@@ -137,15 +148,19 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
                     sstart, send = send, sstart
                     flanks[2], flanks[3] = flanks[3], flanks[2]
                     flanks = tuple(flanks)
-                if FIND_FEATURES:
-                    site = (chrSeqID, (sstart, send), searchiTrees(chrSeqID, sstart, send), overlap, flanks)
+                    vse = (virus_send, virus_sstart)
                 else:
-                    site = (chrSeqID, (sstart, send), [], overlap, flanks)
+                    vse = (virus_sstart, virus_send)
+                if FIND_FEATURES:
+                    site = (chrSeqID, (sstart, send), searchiTrees(chrSeqID, sstart, send), overlap, flanks, vse)
+                else:
+                    site = (chrSeqID, (sstart, send), [], overlap, flanks, vse)
                 insertSites[seqid][specimen][contigName]['referenceoverlaps'].append(site)
             elif not skip and (element.tag == 'match'):
                 match = element
                 for v in vectorHitsLeft:
                     if v.attrib['id'] == match.attrib['leftid']:
+                        chrSeqID = v.attrib['seqid']
                         leftStart = int(v.find('sstart').text)
                         leftEnd = int(v.find('send').text)
 #                        leftQStart = int(v.find('qstart').text)
@@ -168,9 +183,10 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
                     else:
                         overlap = None
                         flanks = ('', '', virus_qstart - leftQEnd, rightQStart - virus_qend)
-                    featuresLeft = removeSite(insertSites[seqid][specimen][contigName]['left'], (v.attrib['seqid'], leftEnd))
-                    featuresRight = removeSite(insertSites[seqid][specimen][contigName]['right'], (v.attrib['seqid'], rightStart))
-                    features = (set(featuresLeft), set(featuresRight), set(searchiTrees(chrSeqID, leftEnd, rightStart)))
+#                     featuresLeft = removeSite(insertSites[seqid][specimen][contigName]['left'], (v.attrib['seqid'], leftEnd))
+#                     featuresRight = removeSite(insertSites[seqid][specimen][contigName]['right'], (v.attrib['seqid'], rightStart))
+#                     features = (featuresLeft, featuresRight, searchiTrees(chrSeqID, leftEnd, rightStart))
+                    vse = (virus_sstart, virus_send)  # virus start end
                 elif (leftStart > leftEnd) and (rightStart > rightEnd):  # aedes hits on reverse strand
                     if rightStart > leftEnd:  # overlapping flanking region
                         overlap = (leftEnd, rightStart)  # convert everything to forward strand
@@ -180,18 +196,23 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
                     else:
                         overlap = None
                         flanks = ('', '', rightQStart - virus_qend, virus_qstart - leftQEnd)
-                    featuresLeft = removeSite(insertSites[seqid][specimen][contigName]['left'], (v.attrib['seqid'], rightStart))
-                    featuresRight = removeSite(insertSites[seqid][specimen][contigName]['right'], (v.attrib['seqid'], leftEnd))
-                    features = (set(featuresLeft), set(featuresRight), set(searchiTrees(chrSeqID, leftEnd, rightStart)))
+#                     featuresLeft = removeSite(insertSites[seqid][specimen][contigName]['left'], (v.attrib['seqid'], rightStart))
+#                     featuresRight = removeSite(insertSites[seqid][specimen][contigName]['right'], (v.attrib['seqid'], leftEnd))
+#                     features = (featuresLeft, featuresRight, searchiTrees(chrSeqID, leftEnd, rightStart))
                     leftEnd, rightStart = rightStart, leftEnd
+                    vse = (virus_send, virus_sstart)
                 else:
                     print('Error!')
                     exit()
-                insertSites[seqid][specimen][contigName][element.tag].append((v.attrib['seqid'], (leftEnd, rightStart), features, overlap, flanks))
+                featuresLeft = removeSite(insertSites[seqid][specimen][contigName]['left'], (v.attrib['seqid'], leftEnd))
+                featuresRight = removeSite(insertSites[seqid][specimen][contigName]['right'], (v.attrib['seqid'], rightStart))
+                features = (featuresLeft, featuresRight, searchiTrees(chrSeqID, leftEnd, rightStart))
+                insertSites[seqid][specimen][contigName][element.tag].append((v.attrib['seqid'], (leftEnd, rightStart), features, overlap, flanks, vse))
             elif not skip and (element.tag == 'inversion'):
                 match = element
                 for v in vectorHitsLeft:
                     if v.attrib['id'] == match.attrib['leftid']:
+                        chrSeqID = v.attrib['seqid']
                         leftStart = int(v.find('sstart').text)
                         leftEnd = int(v.find('send').text)
 #                        leftQStart = int(v.find('qstart').text)
@@ -232,11 +253,13 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
                 flanks = ('', '', virus_qstart - leftQEnd - 1, rightQStart - virus_qend - 1)
                 if leftEnd > rightStart:
                     leftEnd, rightStart = rightStart, leftEnd
-                    features = (set(featuresRight), set(featuresLeft), set(searchiTrees(chrSeqID, leftEnd, rightStart)))
+                    features = (featuresRight, featuresLeft, searchiTrees(chrSeqID, leftEnd, rightStart))
+                    vse = (virus_send, virus_sstart)
                 else:
-                    features = (set(featuresLeft), set(featuresRight), set(searchiTrees(chrSeqID, leftEnd, rightStart)))
+                    features = (featuresLeft, featuresRight, searchiTrees(chrSeqID, leftEnd, rightStart))
+                    vse = (virus_sstart, virus_send)
                 
-                insertSites[seqid][specimen][contigName][element.tag].append((v.attrib['seqid'], (leftEnd, rightStart), features, overlap, flanks))
+                insertSites[seqid][specimen][contigName][element.tag].append((v.attrib['seqid'], (leftEnd, rightStart), features, overlap, flanks, vse))
 
 
             # elif not skip and element.tag == 'inversion':
@@ -353,31 +376,31 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
         totalClusterPidents[cluster] += pident
         totalClusterSize[cluster] += 1
         
-        for chromID, position, feat, dist in insertSites[seqid][specimen][contig]['left']:
+        for chromID, position, feat, dist, vse in insertSites[seqid][specimen][contig]['left']:
             if chromID in lengths:
                 yvalues[cluster][chromID].append(y)
                 xvalues[cluster][chromID].append(position)
-                colors[cluster][chromID].append('#929000')
+                colors[cluster][chromID].append('#87a96b')    # green/asparagus
                 if position not in positions[cluster][chromID]:
                     positions[cluster][chromID][position] = []
                     features[cluster][chromID][position] = []
                     pidents[cluster][chromID][position] = 0
-                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'left', dist, None))
-                features[cluster][chromID][position].append((set(feat), set(), set()))
+                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'left', dist, None, vse))
+                features[cluster][chromID][position].append((feat, [], []))
                 pidents[cluster][chromID][position] += pident
-        for chromID, position, feat, dist in insertSites[seqid][specimen][contig]['right']:
+        for chromID, position, feat, dist, vse in insertSites[seqid][specimen][contig]['right']:
             if chromID in lengths:
                 yvalues[cluster][chromID].append(y)
                 xvalues[cluster][chromID].append(position)
-                colors[cluster][chromID].append('#ff2600')
+                colors[cluster][chromID].append('#ff2600')       # red
                 if position not in positions[cluster][chromID]:
                     positions[cluster][chromID][position] = []
                     features[cluster][chromID][position] = []
                     pidents[cluster][chromID][position] = 0
-                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'right', dist, None))
-                features[cluster][chromID][position].append((set(), set(feat), set()))
+                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'right', dist, None, vse))
+                features[cluster][chromID][position].append(([], feat, []))
                 pidents[cluster][chromID][position] += pident
-        for chromID, position, feat, overlap, flanks in insertSites[seqid][specimen][contig]['match']:
+        for chromID, position, feat, overlap, flanks, vse in insertSites[seqid][specimen][contig]['match']:
             if chromID in lengths:
 #                 if position[0] > position[1]:
 #                     position = position[::-1]
@@ -385,15 +408,15 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
 #                     flanks[2], flanks[3] = flanks[3], flanks[2]
                 yvalues[cluster][chromID].append(y)
                 xvalues[cluster][chromID].append(position[0])
-                colors[cluster][chromID].append('#ff40ff')
+                colors[cluster][chromID].append('#ff40ff')   # magenta
                 if position not in positions[cluster][chromID]:
                     positions[cluster][chromID][position] = []
                     features[cluster][chromID][position] = []
                     pidents[cluster][chromID][position] = 0
-                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'match', overlap, flanks))
+                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'match', overlap, flanks, vse))
                 features[cluster][chromID][position].append(feat)
                 pidents[cluster][chromID][position] += pident
-        for chromID, position, feat, overlap, flanks in insertSites[seqid][specimen][contig]['inversion']:
+        for chromID, position, feat, overlap, flanks, vse in insertSites[seqid][specimen][contig]['inversion']:
             if chromID in lengths:
 #                 if position[0] > position[1]:
 #                     position = position[::-1]
@@ -401,15 +424,15 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
 #                     flanks[2], flanks[3] = flanks[3], flanks[2]
                 yvalues[cluster][chromID].append(y)
                 xvalues[cluster][chromID].append(position[0])
-                colors[cluster][chromID].append('#5e5e5e')
+                colors[cluster][chromID].append('#5e5e5e')       # dark gray
                 if position not in positions[cluster][chromID]:
                     positions[cluster][chromID][position] = []
                     features[cluster][chromID][position] = []
                     pidents[cluster][chromID][position] = 0
-                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'inversion', overlap, flanks))
+                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'inversion', overlap, flanks, vse))
                 features[cluster][chromID][position].append(feat)
                 pidents[cluster][chromID][position] += pident
-        for chromID, position, feat, overlap, flanks in insertSites[seqid][specimen][contig]['referenceoverlaps']:
+        for chromID, position, feat, overlap, flanks, vse in insertSites[seqid][specimen][contig]['referenceoverlaps']:
             if chromID in lengths:
 #                 if position[0] > position[1]:
 #                     position = position[::-1]
@@ -421,8 +444,8 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
                     positions[cluster][chromID][position] = []
                     features[cluster][chromID][position] = []
                     pidents[cluster][chromID][position] = 0
-                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'referenceoverlap', overlap, flanks))
-                features[cluster][chromID][position].append((set(), set(), set(feat)))
+                positions[cluster][chromID][position].append((region + '_' + str(num), contig, 'referenceoverlap', overlap, flanks, vse))
+                features[cluster][chromID][position].append(([], [], feat))
                 pidents[cluster][chromID][position] += pident
         y += 1
         
@@ -493,7 +516,7 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
     clusterPidents = {}
     for chromID in lengths:
         tsvPositionFile = open(saveFileName + '_chr' + str(chromNumber[chromID]) + '.tsv', 'w')
-        tsvPositionFile.write('Cluster\tPosition\tRepeats\tIntron\tExon\t5\' Repeats\t5\' Intron\t5\' Exon\t3\' Repeats\t3\' Intron\t3\' Exon\tGroup\t% Identity\t' + '\t'.join(POPULATIONS.keys()) + '\tSpecimens\n')
+        tsvPositionFile.write('Cluster\tStart\tEnd\tRepeats\tIntron\tExon\t5\' Repeats\t5\' Intron\t5\' Exon\t3\' Repeats\t3\' Intron\t3\' Exon\tGroup\t% Identity\t' + '\t'.join(POPULATIONS.keys()) + '\tSpecimens\n')
         for cluster in positions:
             if cluster not in groupLabels:
                 groupLabels[cluster] = {}
@@ -508,54 +531,81 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
                         groupLabels[cluster][groupNames] = nextGroupLabel[cluster]
                         groups[cluster][nextGroupLabel[cluster]] = [groupNames, []]
                         nextGroupLabel[cluster] += 1
-                    groups[cluster][groupLabels[cluster][groupNames]][1].append((chromNumber[chromID], position, positions[cluster][chromID][position]))
+#                    groups[cluster][groupLabels[cluster][groupNames]][1].append((chromNumber[chromID], position, positions[cluster][chromID][position]))
                     
                     featDict = {'left': {'repeat_region': [], 'intron': [], 'exon': []}, 'right': {'repeat_region': [], 'intron': [], 'exon': []}, 'inregion': {'repeat_region': [], 'intron': [], 'exon': []}}
                     for featLeft, featRight, featIn in features[cluster][chromID][position]:
                         for featType, featID, featPos in featLeft:
                             if featType not in featDict['left']:
                                 featDict['left'][featType] = []
-                            featDict['left'][featType].append(featID)
+                            featDict['left'][featType].append((featType, featID, featPos))
                         for featType, featID, featPos in featRight:
                             if featType not in featDict['right']:
                                 featDict['right'][featType] = []
-                            featDict['right'][featType].append(featID)
+                            featDict['right'][featType].append((featType, featID, featPos))
                         for featType, featID, featPos in featIn:
                             if featType not in featDict['inregion']:
                                 featDict['inregion'][featType] = []
-                            featDict['inregion'][featType].append(featID)
+                            featDict['inregion'][featType].append((featType, featID, featPos))
                             
+                        for featType in featDict['left']:
+                            featDict['left'][featType].sort(key=lambda t: t[2].end, reverse=True)  # closest first
+                            featDict['left'][featType] = removeRuns(featDict['left'][featType])
+                        for featType in featDict['right']:
+                            featDict['right'][featType].sort(key=lambda t: t[2].start)  # closest first
+                            featDict['right'][featType] = removeRuns(featDict['right'][featType])
+                         
                     featStrings = {'left': {}, 'right': {}, 'inregion': {}}
                     for featType in featDict['left']:
                         if featType in ['gene', 'ncRNA_gene', 'pseudogene']:
                             if len(featDict['left']['exon']) > 0:  # omit this; just show exon
                                 continue
                             else:                      # position is in an intron
-                                featStrings['left']['intron'] = ', '.join(set(featDict['left'][featType]))
+                                featStrings['left']['intron'] = ', '.join([t[1] for t in featDict['left'][featType]])  # feature ids
                         else:
-                            featStrings['left'][featType] = ', '.join(set(featDict['left'][featType]))
+                            featStrings['left'][featType] = ', '.join([t[1] for t in featDict['left'][featType]])
                     for featType in featDict['right']:
                         if featType in ['gene', 'ncRNA_gene', 'pseudogene']:
                             if len(featDict['right']['exon']) > 0:  # omit this; just show exon
                                 continue
                             else:                      # position is in an intron
-                                featStrings['right']['intron'] = ', '.join(set(featDict['right'][featType]))
+                                featStrings['right']['intron'] = ', '.join([t[1] for t in featDict['right'][featType]])
                         else:
-                            featStrings['right'][featType] = ', '.join(set(featDict['right'][featType]))
+                            featStrings['right'][featType] = ', '.join([t[1] for t in featDict['right'][featType]])
                     for featType in featDict['inregion']:
                         if featType in ['gene', 'ncRNA_gene', 'pseudogene']:
                             if len(featDict['inregion']['exon']) > 0:  # omit this; just show exon
                                 continue
                             else:                      # position is in an intron
-                                featStrings['inregion']['intron'] = ', '.join(set(featDict['inregion'][featType]))
+                                featStrings['inregion']['intron'] = ', '.join(set([t[1] for t in featDict['inregion'][featType]])) # order doesn't matter here
                         else:
-                            featStrings['inregion'][featType] = ', '.join(set(featDict['inregion'][featType]))
-                        
-                    tsvPositionFile.write(cluster[1:] + '\t' + str(position) + '\t' + featStrings['inregion']['repeat_region'] + '\t' + featStrings['inregion']['intron'] + '\t' + featStrings['inregion']['exon'] + '\t' + featStrings['left']['repeat_region'] + '\t' + featStrings['left']['intron'] + '\t' + featStrings['left']['exon'] + '\t' + featStrings['right']['repeat_region'] + '\t' + featStrings['right']['intron'] + '\t' + featStrings['right']['exon'] + '\t' + str(groupLabels[cluster][groupNames]) + '\t' + '{:5.2f}'.format(pidents[cluster][chromID][position] / len(positions[cluster][chromID][position])) + '\t')
+                            featStrings['inregion'][featType] = ', '.join(set([t[1] for t in featDict['inregion'][featType]]))
+                            
+                    if len(featDict['left']['repeat_region']) > 0:
+                        upstreamRepeat = featDict['left']['repeat_region'][0][1]
+                    else:
+                        upstreamRepeat = ''
+                    if len(featDict['right']['repeat_region']) > 0:
+                        downstreamRepeat = featDict['right']['repeat_region'][0][1]
+                    else:
+                        downstreamRepeat = ''
+                    if len(featDict['inregion']['repeat_region']) > 0:
+                        inregionRepeats = featStrings['inregion']['repeat_region']
+                    else:
+                        inregionRepeats = ''
+                    groups[cluster][groupLabels[cluster][groupNames]][1].append((chromNumber[chromID], position, (upstreamRepeat, downstreamRepeat, inregionRepeats, featStrings['inregion']['intron']), positions[cluster][chromID][position]))
+                    
+                    if isinstance(position, tuple):
+                        start = str(position[0])
+                        end = str(position[1])
+                    else:
+                        start = str(position)
+                        end = ''
+                    tsvPositionFile.write(cluster[1:] + '\t' + start + '\t' + end + '\t' + featStrings['inregion']['repeat_region'] + '\t' + featStrings['inregion']['intron'] + '\t' + featStrings['inregion']['exon'] + '\t' + featStrings['left']['repeat_region'] + '\t' + featStrings['left']['intron'] + '\t' + featStrings['left']['exon'] + '\t' + featStrings['right']['repeat_region'] + '\t' + featStrings['right']['intron'] + '\t' + featStrings['right']['exon'] + '\t' + str(groupLabels[cluster][groupNames]) + '\t' + '{:5.2f}'.format(pidents[cluster][chromID][position] / len(positions[cluster][chromID][position])) + '\t')
                     
                     countsByRegion = {region: 0 for region in POPULATIONS}
                     line = ''
-                    for specimen, contig, type, overlap, flanks in positions[cluster][chromID][position]:
+                    for specimen, contig, type, overlap, flanks, vse in positions[cluster][chromID][position]:
                         region = specimen.split('_')[0]
                         countsByRegion[region] += 1
                         if isinstance(position, tuple):
@@ -632,7 +682,7 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
         groupLabelsSorted.sort(key = lambda label: len(groups[cluster][label][0]), reverse = True)
         for groupLabel in groupLabelsSorted:
             textFile.write('    Group ' + str(groupLabel) + ' (size ' + str(len(groups[cluster][groupLabel][0])) + ')\n      ') # + ' (' + ', '.join(groups[cluster][groupLabel][0]) + ')\n      ')
-            for chr, pos, hits in groups[cluster][groupLabel][1]:
+            for chr, pos, feat, hits in groups[cluster][groupLabel][1]:
                 if isinstance(pos, tuple):
                     textFile.write('{0}: {1:,}--{2:,} ({3})'.format(chr, pos[0], pos[1], hits[0][2]) + '; ')
                 else:
@@ -646,7 +696,7 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
         groupLabelsSorted.sort(key = lambda label: len(groups[cluster][label][0]), reverse = True)
         for groupLabel in groupLabelsSorted:
             found2 = False
-            for chr, pos, hits in groups[cluster][groupLabel][1]:
+            for chr, pos, feat, hits in groups[cluster][groupLabel][1]:
 #                if isinstance(pos[1], tuple):
                 found1 = False
                 for hit in hits:
@@ -655,13 +705,13 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
                             textFile.write('    Group ' + str(groupLabel) + ' (size ' + str(len(groups[cluster][groupLabel][0])) + ')\n')
                             found2 = True
                         if not found1:
-                            textFile.write('      {0}: {1:,}--{2:,}\n'.format(chr, pos[0], pos[1]))
+                            textFile.write('      {0}: {1:,}--{2:,} {3}\n'.format(chr, pos[0], pos[1], ', '.join(feat[2:])))  # inregion features only
                             found1 = True
                         if hit[3] is not None:
 #                            textFile.write('        {0:<20} {1:<10} {2:,} - {3:,} {4} ({5}, {6})\n'.format(hit[0], hit[2], hit[3][0], hit[3][1], ', '.join(hit[4][:2]), hit[4][2], hit[4][3]))
-                            textFile.write('        {0:<20} {1:<10} {2} ({3}, {4})\n'.format(hit[0], hit[2], ', '.join(hit[4][:2]), hit[4][2], hit[4][3]))
+                            textFile.write('        {0:<20} {1:<10} {2} ({3}, {4})  virus {5}-{6}\n'.format(hit[0], hit[2], ', '.join(hit[4][:2]), hit[4][2], hit[4][3], hit[5][0], hit[5][1]))
                         else:
-                            textFile.write('        {0:<20} {1:<10} ({2}, {3})\n'.format(hit[0], hit[2], hit[4][2], hit[4][3]))
+                            textFile.write('        {0:<20} {1:<10} ({2}, {3})  virus {4}-{5}\n'.format(hit[0], hit[2], hit[4][2], hit[4][3], hit[5][0], hit[5][1]))
             if found2:
                 textFile.write('\n\n')
             
