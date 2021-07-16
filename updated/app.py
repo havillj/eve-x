@@ -279,13 +279,13 @@ app.layout = html.Div(children=[
      style = {'textAlign': 'center'}),
     html.Br(),
 
-    html.Div ([dcc.Dropdown( id='countries-dropdown',placeholder = 'Select a region',options=[{'label': k, 'value': k} for k in all_regions.keys()])], style = {'width':'20%', 'display': 'inline-block'},),
+    html.Div ([dcc.Dropdown( id='countries-dropdown',placeholder = 'Select a region', clearable = False, options=[{'label': k, 'value': k} for k in all_regions.keys()])], style = {'width':'20%', 'display': 'inline-block'},),
 
-    html.Div([dcc.Dropdown(id='numbers-dropdown', placeholder = 'Select a num'),], style = {'width':'20%', 'display': 'inline-block'},),
+    html.Div([dcc.Dropdown(id='numbers-dropdown', placeholder = 'Select a num', clearable = False)], style = {'width':'20%', 'display': 'inline-block'},),
 
-    html.Div([dcc.Dropdown(id='family-dropdown', options = [{'label': k, 'value': k} for k in vFam.keys()], placeholder = 'Select a family')], style = {'width': '30%', 'display': 'inline-block'}),
+    html.Div([dcc.Dropdown(id='family-dropdown', options = [{'label': k, 'value': k} for k in vFam.keys()], clearable = False, placeholder = 'Select a family')], style = {'width': '30%', 'display': 'inline-block'}),
 
-    html.Div([dcc.Dropdown(id='virus-dropdown', placeholder = 'Select a virus'),], style = {'width':'30%', 'display': 'inline-block'}),
+    html.Div([dcc.Dropdown(id='virus-dropdown', clearable = False, placeholder = 'Select a virus')], style = {'width':'30%', 'display': 'inline-block'}),
 
     html.Br(),html.Br(),
 
