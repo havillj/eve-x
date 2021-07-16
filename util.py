@@ -26,7 +26,7 @@ VIRUS_DB = 'virusdb'
 ROOT_DIR = '/Volumes/Data2/'  # '/home/havill/data/aegypti/analyzed/'
 SPECIMENS_DIR = ROOT_DIR + 'specimens/'
 
-RESULTS_DIR = ROOT_DIR + 'results20k/'
+RESULTS_DIR = ROOT_DIR + 'results/'
 VIRUSES_DIR = RESULTS_DIR + 'viruses/'
 SEQUENCES_DIR = VIRUSES_DIR + 'sequences/'
 
@@ -199,10 +199,12 @@ def writelog(message, alsoPrint = False):
         
 ###############################################################################
         
-def getContig(dirName, contigName, start, end):
+def getContig(dirName, contigName, start, end = None):
     scaffoldsFilename = str(Path(dirName) / 'results/scaffolds/scaffolds.fasta')
     scaffoldRecords = SeqIO.index(scaffoldsFilename, 'fasta')
     contigRecord = scaffoldRecords[contigName]
+    if end is None:
+        return str(contigRecord.seq)[start - 1:]
     return str(contigRecord.seq)[start - 1:end]  # account for 1-based indexing
         
 def main():

@@ -485,11 +485,11 @@ def getHits(dirName): #, maxFlankingHits):
                     if ((virus_qstart - aedes_qend > MAX_FLANKING_DISTANCE) or (aedes_qstart - virus_qend > MAX_FLANKING_DISTANCE)) and (len(aedes_qseq) < MIN_FLANKING_HIT_LENGTH):
                         writelog(contig + ': discarded distant Aedes hit with length ' + str(len(aedes_qseq)) + ' < ' + str(MIN_FLANKING_HIT_LENGTH))
                         continue
-                    hitComplexity = complexity(aedes_qseq, COMPLEXITY_K)  # COMPLEXITY TEST
-                    if hitComplexity < COMPLEXITY_CUTOFF:
-                        writelog(contig + ': discarded Aedes hit with complexity ' + str(hitComplexity) + ' < ' + str(COMPLEXITY_CUTOFF))
-                        continue
-    
+#                     hitComplexity = complexity(aedes_qseq, COMPLEXITY_K)  # COMPLEXITY TEST
+#                     if hitComplexity < COMPLEXITY_CUTOFF:
+#                         writelog(contig + ': discarded Aedes hit with complexity ' + str(hitComplexity) + ' < ' + str(COMPLEXITY_CUTOFF))
+#                         continue
+
                     virusIntervalsNotInRef.chop(aedes_qstart, aedes_qend)  # detect overlap with virus hit
                     if aedes_qstart < virus_qstart and aedes_qend < virus_qend:
                         before.append(index)
@@ -766,7 +766,7 @@ def drawXML(fileName):
                     addFamily(seqid, fam)
                 family = fams[seqid]
                 
-            stitle += ' (' + str(seqid) + ')'
+            stitle_seqid = stitle + ' (' + str(seqid) + ')'
             if not BEST_HITS_ONLY and (contig.attrib['besthit'] == 'True'):                
                 if seqid not in fams:
                     fam = getFamily(seqid)
@@ -780,11 +780,11 @@ def drawXML(fileName):
                 strand = -1
             gf = GraphicFeature(start=qstart, end=qend, strand=strand, thickness=thickness, linewidth=0,
                                            color='#ff0000', fontdict = {'size': labelFontSize},
-                                           label = stitle.lstrip('|') + ' ' + str(sstart) + '-' + str(send) + ' (' + str(length) + ' bp; ' + str(pident) + '%)')  #; ' + str(evalue) + ')')
+                                           label = stitle_seqid.lstrip('|') + ' ' + str(sstart) + '-' + str(send) + ' (' + str(length) + ' bp; ' + str(pident) + '%)')  #; ' + str(evalue) + ')')
             features.append(gf)
             gfCopy = copy.deepcopy(gf)
             if not BEST_HITS_ONLY and (contig.attrib['besthit'] == 'True'):
-                gfCopy.label = '**' + stitle.lstrip('|') + '** ' + str(sstart) + '-' + str(send) + ' (' + str(length) + ' bp; ' + str(pident) + '%)'
+                gfCopy.label = '**' + stitle_seqid.lstrip('|') + '** ' + str(sstart) + '-' + str(send) + ' (' + str(length) + ' bp; ' + str(pident) + '%)'
             contigFeaturesV[c].append(gfCopy)
         families[c] = family
         hitsLeft = contig.findall('vectorhitleft')
@@ -915,12 +915,13 @@ def drawXML(fileName):
         familyDir = str(diagramsPath / family)
         if not Path(familyDir).exists():
             os.mkdir(familyDir)
+        specimen = Path(fileName).parent.parent.parent.name
         if contig.attrib['besthit'] == 'True':
-            pp = PdfPages(str(Path(familyDir) / (contig.attrib['name'] + '_BEST-HIT.pdf')))
+            pp = PdfPages(str(Path(familyDir) / (specimen + '_' + contig.attrib['name'].replace('__', '-') + '_' + stitle + '_' + seqid + '_BEST-HIT.pdf')))
             pp.savefig(fig)
             pp.close()
         else:
-            pp = PdfPages(str(Path(familyDir) / (contig.attrib['name'] + '.pdf')))
+            pp = PdfPages(str(Path(familyDir) / (specimen + '_' + contig.attrib['name'].replace('__', '-') + '_' + stitle + '_' + seqid + '.pdf')))
             pp.savefig(fig)
             pp.close()
         pyplot.close(fig)
@@ -931,7 +932,7 @@ def drawXML(fileName):
         
             ax, _ = record.plot(max_label_length = 80, figure_width = 10)
             familyDir = str(diagramsPath / families[c])
-            pp = PdfPages(str(Path(familyDir) / (c + '_all-viral-hits.pdf')))
+            pp = PdfPages(str(Path(familyDir) / (specimen + '_' + c + '_' + stitle + '_' + seqid + '_all-viral-hits.pdf')))
             pp.savefig(ax.figure)
             pp.close()
             pyplot.close(ax.figure)
@@ -1437,6 +1438,10 @@ def consolidateAll():
         allFamilies.append(fams[seqid])
 
     # Write family sequence files
+    
+    # blastn -task blastn -query results20k/viruses/sequences/Flaviviridae/sequences_NC_027819.1_per_contig_unaligned.fasta 
+    #        -subject fasta/NC_001564.2.fasta -evalue 1e-10 -no_greedy
+    # -outfmt "10 qseqid qstart qend qseq sstart send sseq evalue bitscore sseqid stitle pident"
         
     for family in set(allFamilies):
         FAMILY_DIR = SEQUENCES_DIR + family
@@ -1986,6 +1991,4 @@ def main():
     drawAll(False)
 #    drawFamily([('Flaviviridae', 'NC_001564.2'), ('Orthomyxoviridae', 'MF176251.1'), ('Phenuiviridae', 'NC_038263.1'), ('Rhabdoviridae', 'NC_035132.1'), ('Totiviridae', 'NC_035674.1'), ('Xinmoviridae', 'MH037149.1')],None, False, False, True, False, False)
     
-#main()
-RESULTS_DIR = ROOT_DIR + 'results20k_2/'
-consolidateAll()
+main()

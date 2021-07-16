@@ -2,7 +2,7 @@ from util import *
 
 def main():
     start = 1
-    end = 100000
+    end = None
     if len(sys.argv) >= 4:
         start = int(sys.argv[3])
     if len(sys.argv) >= 5:
