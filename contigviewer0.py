@@ -13,6 +13,7 @@ import matplotlib.pyplot as pyplot
 matplotlib.use('Agg')
 import math
 import dash_bootstrap_components as dbc
+from dash.exceptions import PreventUpdate
 #from pathlib import Path
 #from util import getContig
 
@@ -328,7 +329,7 @@ app.layout = html.Div(
     html.Div (id = 'overlap-div', children =[html.P(id = 'choose-overlap', style = {'font-size':14}), dcc.Input(id='overlap-num', type ='number', placeholder = 'Number of overlaps', min=0, value = 0)],
              style = {'display':'none', "margin-left": "20px"}),
 
-    html.Div([html.Img(id = 'contigDiagram')], style = {'textAlign': 'center'}),
+    html.Div(id = 'img-buttons', children = [html.Img(id = 'contigDiagram', style = {'textAlign': 'center'}),
 
     html.Br(),
 
@@ -339,7 +340,7 @@ app.layout = html.Div(
 
     html.P(id="download-seq", style = {'display': 'none'}),
 
-    html.Button("Download Contig", id="btn_txt", style = {'display': 'none'}),
+    html.Button("Download Contig", id="btn_txt", style = {'display': 'none'}),]),
 
     dcc.Download(id='download-text'),
 
@@ -365,22 +366,30 @@ def func(n_clicks, seq, country, num):
 
 @app.callback(
     Output('btn_txt', 'style'),
+    Output('contig-num', 'value'),
+    Output('matches-num', 'value'),
+    Output('inv-num', 'value'),
+    Output('left-num', 'value'),
+    Output('right-num', 'value'),
+    Output('overlap-num', 'value'),
     Input('submit','n_clicks'),
     prevent_initial_call=True,
 )
 def hideDownload(n_clicks):
-    return {'display' : 'inline-block'}
+    return {'display' : 'inline-block'}, 1, 0, 0, 0, 0, 0
 
 ###############################################################################
 
 @app.callback(
     Output('submit', 'style'),
+    Output('family-dropdown', 'value'),
+    Output('virus-dropdown', 'value'),
     Output('fam-vir', 'style'),
     Input('submit-1','n_clicks'),
     prevent_initial_call=True,
 )
 def hideFirstSubmit(n_clicks):
-    return {'display' : 'inline-block'}, {'display' : 'block'}
+    return {'display' : 'inline-block'}, 'none', 'none', {'display' : 'block'}
 
 
 ###############################################################################
@@ -458,6 +467,20 @@ def set_contig_caption(state, contig_max):
 ###############################################################################
 
 @app.callback(
+    Output('img-buttons','style'),
+    Input('family-dropdown', 'value'),
+    Input('virus-dropdown', 'value'),
+    prevent_initial_call = True
+)
+def hideIMG(fam, vir):
+    if fam != 'none' and vir != 'none':
+        return {'display':'block'}
+    else:
+        return {'display':'none'}
+
+###############################################################################
+
+@app.callback(
     Output('family-dropdown', 'options'),
     Input('submit-1', 'n_clicks'),
     State('numbers-dropdown', 'value'),
@@ -485,6 +508,8 @@ def set_family_options(n_clicks, specNum, spec):
 )
 def set_virus_options(family, spec, specNum):
     options = []
+    if family == 'none':
+        return []
     for v in vFam[family]:
         if v in specVirus[(spec, specNum)]:
             options.append(v)
@@ -501,15 +526,6 @@ def set_virus_options(family, spec, specNum):
 def set_cities_options(selected_country):
     return [{'label': i, 'value': i} for i in all_regions[selected_country]], 'None'
 
-###############################################################################
-
-# @app.callback(
-#     Output('countries-dropdown', 'options'),
-#     Output('virus-dropdown', 'value'),
-#     Input('header', 'children')
-# )
-# def set_virus_value(available_options):
-#     return [{'label': k, 'value': k} for k in all_regions.keys()], 'None'
 
 ###############################################################################
 
