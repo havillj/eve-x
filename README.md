@@ -1,11 +1,11 @@
-# eve
+# EVE
 
-# Dependencies
+## Dependencies
 
-# Installation
+## Installation
 
-# Parameters
+## Parameters
 
-# Usage
+## Usage
 
-# Directory structure and file names
+## Directory structure and file names
