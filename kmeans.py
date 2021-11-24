@@ -1,10 +1,4 @@
-import sys
-import math
-import random
-import copy
-import numpy as np
-from Bio import AlignIO
-from Bio.Align import MultipleSeqAlignment
+# kmeans.py
 
 from util import *
     
@@ -90,7 +84,7 @@ def kmeans(data, k):
     prevClusters = None
     clusters = []
     iteration = 0
-    while (iteration < MAX_KMEANS_ITERATIONS) and (clusters != prevClusters):
+    while (iteration < config['MAX_KMEANS_ITERATIONS']) and (clusters != prevClusters):
         prevClusters = clusters[:]
         clusters = []
         for clustIndex in range(k):
@@ -132,7 +126,7 @@ def meanSilhouetteValue(clusters, data):
                 total += (b - a) / max(a, b)
     return total / len(data)
 
-def findClusters(fileName, omitFirst = True, minK = MIN_K, maxK = MAX_K):
+def findClusters(fileName, omitFirst = True, minK = config['MIN_K'], maxK = config['MAX_K']):
     print('Clustering aligned sequences in ' + fileName + '...')
     
     aln = AlignIO.read(fileName, 'fasta') # Bio.Align.MultipleSeqAlignment object
@@ -169,7 +163,7 @@ def findClusters(fileName, omitFirst = True, minK = MIN_K, maxK = MAX_K):
         silhouettes[k] = []
         print('  k = ' + str(k))
         print('  Trial ', end='')
-        for trial in range(1, KMEANS_TRIALS + 1):
+        for trial in range(1, config['KMEANS_TRIALS'] + 1):
             print(str(trial), end=' ', flush=True)
             clusters = kmeans(data, k)
             silhouettes[k].append((meanSilhouetteValue(clusters, data), clusters))
@@ -184,11 +178,11 @@ def findClusters(fileName, omitFirst = True, minK = MIN_K, maxK = MAX_K):
         silhouettes[k].sort(reverse = True)
         print('  {0:>2}: '.format(k), end='')
         sumSV = 0
-        for i in range(KMEANS_TRIALS - 1):
+        for i in range(config['KMEANS_TRIALS'] - 1):
             print('{0:6.4f}, '.format(silhouettes[k][i][0]), end='')
             sumSV += silhouettes[k][i][0]
         sumSV += silhouettes[k][-1][0]
-        print('{0:6.4f} (average = {1:6.4f})'.format(silhouettes[k][-1][0], sumSV / KMEANS_TRIALS))
+        print('{0:6.4f} (average = {1:6.4f})'.format(silhouettes[k][-1][0], sumSV / config['KMEANS_TRIALS']))
         if silhouettes[k][0][0] > maxSV:
             maxSV = silhouettes[k][0][0]
             bestK = k
@@ -236,7 +230,10 @@ def findClusters(fileName, omitFirst = True, minK = MIN_K, maxK = MAX_K):
                     regionCounts[clusterNum][region] = [specimenName]
                 else:
                     regionCounts[clusterNum][region].append(specimenName)
-                records.append(copy.deepcopy(aln[index + 1]))
+                if omitFirst:
+                    records.append(copy.deepcopy(aln[index + 1]))
+                else:
+                    records.append(copy.deepcopy(aln[index]))
                 d = records[-1].description
                 records[-1].description = 'C' + str(clusterNum) + '_|_' + d
                 records[-1].id = records[-1].description
@@ -268,8 +265,8 @@ def main():
         return
     
     omitFirst = False
-    minK = MIN_K
-    maxK = MAX_K
+    minK = config['MIN_K']
+    maxK = config['MAX_K']
     for arg in sys.argv[1:-1]:
         if arg.startswith('--min_k'):
             try:

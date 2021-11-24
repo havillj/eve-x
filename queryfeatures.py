@@ -23,7 +23,7 @@ def main():
             feats = searchiTrees(seqid, start, end)
             if parts[2] == '-':
                 feats.sort(key=lambda t: t[2].end, reverse=True)
-            elif parts[2] == '+':
+            else: # if parts[2] == '+':
                 feats.sort(key=lambda t: t[2].start)
             features = []
             for type, id, location in feats:

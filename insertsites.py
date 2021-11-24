@@ -1,9 +1,4 @@
-from pathlib import Path
-import matplotlib
-matplotlib.use('agg')
-from matplotlib.backends.backend_pdf import PdfPages
-import matplotlib.pyplot as pyplot
-from lxml import etree as ET
+#!/usr/bin/env python3
 
 from util import *
 from features import *
@@ -26,7 +21,7 @@ def removeRuns(values):
     return newValues
     
 def getFlanks(specimen, contigName, leftStart, leftEnd, rightStart, rightEnd):
-    scaffoldsFilename = str(Path(SPECIMENS_DIR) / (specimen + '/results/scaffolds/scaffolds.fasta'))
+    scaffoldsFilename = str(Path(SPECIMENS_DIR) / (specimen + '/' + SPECIMEN_RESULTS_DIR + '/scaffolds/scaffolds.fasta'))
     scaffoldRecords = SeqIO.index(scaffoldsFilename, 'fasta')
     contigRecord = scaffoldRecords[contigName]
     seq = str(contigRecord.seq)
@@ -39,7 +34,7 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
     specimensPath = Path(SPECIMENS_DIR)
     for specimenDir in specimensPath.iterdir():
         if specimenDir.name[0] != '.':
-            for file in (specimenDir / 'results/xml').iterdir():
+            for file in (specimenDir / (SPECIMEN_RESULTS_DIR + '/xml')).iterdir():
 #                if (file.name[0] != '.') and (('_hits_features.xml' in file.name) or (('_hits.xml' in file.name) and not Path(str(file)[:-4] + '_features.xml').exists())):
                 if (file.name[0] != '.') and file.name.endswith('_hits.xml'):
                     xmlFiles.append(file.resolve())
@@ -96,54 +91,56 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
             elif not skip and element.tag == 'vectorhitleft':
                 vectorHitsLeft.append(element)
                 v = element
-                aedes_qstart = int(v.find('qstart').text)
-                aedes_qend = int(v.find('qend').text)
-                if (-ALLOWED_OVERLAP <= virus_qstart - aedes_qend <= MAX_FLANKING_DISTANCE) or (-ALLOWED_OVERLAP <= aedes_qstart - virus_qend <= MAX_FLANKING_DISTANCE): # or (len(aedes_qseq) >= MIN_FLANKING_HIT_LENGTH):
+                host_qstart = int(v.find('qstart').text)
+                host_qend = int(v.find('qend').text)
+#                if (-ALLOWED_OVERLAP <= virus_qstart - host_qend <= config['MAX_HOST_VIRUS_DISTANCE'])) or (-ALLOWED_OVERLAP <= host_qstart - virus_qend <= config['MAX_HOST_VIRUS_DISTANCE'])):
+                if (virus_qstart - host_qend <= config['MAX_HOST_VIRUS_DISTANCE'])) or (host_qstart - virus_qend <= config['MAX_HOST_VIRUS_DISTANCE'])):
                     chrSeqID = v.attrib['seqid']
                     sstart = int(v.find('sstart').text)
                     send = int(v.find('send').text)
                     if sstart < send:
                         if FIND_FEATURES:
-                            site = (chrSeqID, send, searchiTrees(chrSeqID, send - FEATURE_SEARCH_DIST, send), virus_qstart - aedes_qend, (virus_sstart, virus_send))
+                            site = (chrSeqID, send, searchiTrees(chrSeqID, send - config['FEATURE_SEARCH_DIST'], send), virus_qstart - host_qend, (virus_sstart, virus_send))
                         else:
-                            site = (chrSeqID, send, [], virus_qstart - aedes_qend, (virus_sstart, virus_send))
+                            site = (chrSeqID, send, [], virus_qstart - host_qend, (virus_sstart, virus_send))
                         insertSites[seqid][specimen][contigName]['left'].append(site)
                     else:  # this is actually a right flanking region
                         if FIND_FEATURES:
-                            site = (chrSeqID, send, searchiTrees(chrSeqID, send, send + FEATURE_SEARCH_DIST), virus_qstart - aedes_qend, (virus_send, virus_sstart))
+                            site = (chrSeqID, send, searchiTrees(chrSeqID, send, send + config['FEATURE_SEARCH_DIST']), virus_qstart - host_qend, (virus_send, virus_sstart))
                         else:
-                            site = (chrSeqID, send, [], virus_qstart - aedes_qend, (virus_send, virus_sstart))
+                            site = (chrSeqID, send, [], virus_qstart - host_qend, (virus_send, virus_sstart))
                         insertSites[seqid][specimen][contigName]['right'].append(site)
             elif not skip and element.tag == 'vectorhitright':
                 vectorHitsRight.append(element)
                 v = element
-                aedes_qstart = int(v.find('qstart').text)
-                aedes_qend = int(v.find('qend').text)
-                if (-ALLOWED_OVERLAP <= virus_qstart - aedes_qend <= MAX_FLANKING_DISTANCE) or (-ALLOWED_OVERLAP <= aedes_qstart - virus_qend <= MAX_FLANKING_DISTANCE): # or (len(aedes_qseq) >= MIN_FLANKING_HIT_LENGTH):
+                host_qstart = int(v.find('qstart').text)
+                host_qend = int(v.find('qend').text)
+#                if (-ALLOWED_OVERLAP <= virus_qstart - host_qend <= config['MAX_HOST_VIRUS_DISTANCE'])) or (-ALLOWED_OVERLAP <= host_qstart - virus_qend <= config['MAX_HOST_VIRUS_DISTANCE'])):
+                if (virus_qstart - host_qend <= config['MAX_HOST_VIRUS_DISTANCE'])) or (host_qstart - virus_qend <= config['MAX_HOST_VIRUS_DISTANCE'])):
                     chrSeqID = v.attrib['seqid']
                     sstart = int(v.find('sstart').text)
                     send = int(v.find('send').text)
                     if sstart < send:
                         if FIND_FEATURES:
-                            site = (chrSeqID, sstart, searchiTrees(chrSeqID, sstart, sstart + FEATURE_SEARCH_DIST), aedes_qstart - virus_qend, (virus_sstart, virus_send))
+                            site = (chrSeqID, sstart, searchiTrees(chrSeqID, sstart, sstart + config['FEATURE_SEARCH_DIST']), host_qstart - virus_qend, (virus_sstart, virus_send))
                         else:
-                            site = (chrSeqID, sstart, [], aedes_qstart - virus_qend, (virus_sstart, virus_send))
+                            site = (chrSeqID, sstart, [], host_qstart - virus_qend, (virus_sstart, virus_send))
                         insertSites[seqid][specimen][contigName]['right'].append(site)
                     else:  # this is actually a left flanking region
                         if FIND_FEATURES:
-                            site = (chrSeqID, sstart, searchiTrees(chrSeqID, sstart - FEATURE_SEARCH_DIST, sstart), aedes_qstart - virus_qend, (virus_send, virus_sstart))
+                            site = (chrSeqID, sstart, searchiTrees(chrSeqID, sstart - config['FEATURE_SEARCH_DIST'], sstart), host_qstart - virus_qend, (virus_send, virus_sstart))
                         else:
-                            site = (chrSeqID, sstart, [], aedes_qstart - virus_qend, (virus_send, virus_sstart))
+                            site = (chrSeqID, sstart, [], host_qstart - virus_qend, (virus_send, virus_sstart))
                         insertSites[seqid][specimen][contigName]['left'].append(site)
             elif not skip and element.tag == 'vectorhitoverlap':
                 v = element
-                aedes_qstart = int(v.find('qstart').text)
-                aedes_qend = int(v.find('qend').text)
+                host_qstart = int(v.find('qstart').text)
+                host_qend = int(v.find('qend').text)
                 chrSeqID = v.attrib['seqid']
                 sstart = int(v.find('sstart').text)
                 send = int(v.find('send').text)
                 overlap = None
-                flanks = ['', '', virus_qstart - aedes_qstart, aedes_qend - virus_qend]  # dists beyond ends of EVE; negative means doesn't cover that end of EVE
+                flanks = ['', '', virus_qstart - host_qstart, host_qend - virus_qend]  # dists beyond ends of EVE; negative means doesn't cover that end of EVE
                 if sstart > send:
                     sstart, send = send, sstart
                     flanks[2], flanks[3] = flanks[3], flanks[2]
@@ -174,7 +171,7 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
 #                        rightQEnd = int(v.find('qend').text)
                         break
                 
-                if (leftStart < leftEnd) and (rightStart < rightEnd):  # aedes hits on forward strand
+                if (leftStart < leftEnd) and (rightStart < rightEnd):  # host hits on forward strand
                     if rightStart < leftEnd:  # overlapping flanking region
                         overlap = (rightStart, leftEnd)
                         flankLength = leftEnd - rightStart + 1
@@ -187,7 +184,7 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
 #                     featuresRight = removeSite(insertSites[seqid][specimen][contigName]['right'], (v.attrib['seqid'], rightStart))
 #                     features = (featuresLeft, featuresRight, searchiTrees(chrSeqID, leftEnd, rightStart))
                     vse = (virus_sstart, virus_send)  # virus start end
-                elif (leftStart > leftEnd) and (rightStart > rightEnd):  # aedes hits on reverse strand
+                elif (leftStart > leftEnd) and (rightStart > rightEnd):  # host hits on reverse strand
                     if rightStart > leftEnd:  # overlapping flanking region
                         overlap = (leftEnd, rightStart)  # convert everything to forward strand
                         flankLength = rightStart - leftEnd + 1
@@ -525,7 +522,7 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
             sortedPositions = list(positions[cluster][chromID].keys())
             sortedPositions.sort(key=lambda x: int(x[0]) if isinstance(x, tuple) else int(x))
             for position in sortedPositions:
-                if len(positions[cluster][chromID][position]) >= MIN_HITS_TO_SHOW_POSITION:
+                if len(positions[cluster][chromID][position]) >= config['MIN_HITS_TO_SHOW_POSITION']:
                     groupNames = tuple([t[0] for t in positions[cluster][chromID][position]])
                     if groupNames not in groupLabels[cluster]:
                         groupLabels[cluster][groupNames] = nextGroupLabel[cluster]

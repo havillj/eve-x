@@ -1,9 +1,4 @@
-import re
-from Bio.SeqFeature import SeqFeature, FeatureLocation
-from intervaltree import Interval, IntervalTree
-from lxml import etree as ET
-from pathlib import Path
-import pickle
+# features.py
 
 from util import *
 
@@ -14,7 +9,6 @@ def getGFFFeatures(fileName):
     
     global iTrees
     
-    chromNumbers = {'1': 'NC_035107.1', '2': 'NC_035108.1', '3': 'NC_035109.1', 'MT': 'NC_035159.1'}
     strands = {'+': +1, '-': -1, '.': 0}
    
     gff = open(fileName, 'r')
@@ -26,8 +20,8 @@ def getGFFFeatures(fileName):
         cols = line.strip().split('\t')
         
         seqid = cols[0]
-        if seqid in chromNumbers:
-            seqid = chromNumbers[seqid]
+        if seqid in CHR_NUMBERS:
+            seqid = CHR_NUMBERS[seqid]
         else:
             seqid += '.1'
             
@@ -76,7 +70,6 @@ def makeIntervalTrees():
     else:
         iTrees = {}
         writelog('Reading base features...', True)
-        # https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/002/204/515/GCF_002204515.2_AaegL5.0/
         getGFFFeatures(BASE_FEATURES_GFF3_FILENAME)
     
         writelog('Reading repeat features...', True)

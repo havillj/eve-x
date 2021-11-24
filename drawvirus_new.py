@@ -78,7 +78,7 @@ def drawFromFile(fileName, virusName):
 def drawEVEs(EVEs, virusName, title, openEnds = None):
 
     width = 10
-    height = 5
+    height = 4.75
     thickness = 10
     fontsize = 6
     
@@ -178,8 +178,15 @@ XIN_EVEs = [('XIN EVE 1', 10, 900),
             ('XIN EVE 3', 1230, 608, 602, 1262),
              ('XIN EVE 4', 3775, 4891),
              ('XIN EVE 5', 4290, 5551),
-             ('XIN EVE 6', 351, 1401)]
+             ('XIN EVE 6', 351, 1522)]
 openEnds = [(True, True), (True, True), (False, False, False, False), (True, True), (True, True), (True, True)]
+
+# XIN_EVEs = [('XIN EVE 1', 10, 1393),
+#             ('XIN EVE 2', 1230, 608, 602, 1262),
+#              ('XIN EVE 3', 3775, 4891),
+#              ('XIN EVE 4', 4290, 5551),
+#              ('XIN EVE 5', 351, 1401)]
+# openEnds = [(True, True), (False, False, False, False), (True, True), (True, True), (True, True)]
              
 drawEVEs(XIN_EVEs, 'MH037149.1', 'XIN EVEs', openEnds)
 

@@ -532,7 +532,7 @@ def pickContig(state, cNum, spec, specNum, virus):
 
     cNum -= 1
     dir = label2Specimen[(spec,int(specNum))]
-    pathN = '/Volumes/Data2/specimens/'+ dir + '/results/xml/' + dir +'_hits.xml'
+    pathN = '/Volumes/Data2/specimens/'+ dir + '/results2/xml/' + dir +'_hits.xml'
     nodeL = []
 
     parser = etree.XMLParser(remove_blank_text=True)
