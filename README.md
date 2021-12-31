@@ -70,6 +70,12 @@ To make diagrams more readable, also edit the variable `CHR_NAMES` in `config.py
 CHR_NAMES = {'NC_035107.1': 'Chr1', 'NC_035108.1': 'Chr2', 'NC_035109.1': 'Chr3'}
 ```
 
+### Root directory
+
+```
+ROOT_DIR = '/Volumes/Data/'
+```
+
 ### Host genome features
 
 To identify repeat sequences and other genomic features near putative viral insertions, EVE needs files in GFF3 format that list these features.  For example, these files for *Aedes aegpyti* can be obtained from http://vectorbase.org ([here](https://vectorbase.org/common/downloads/release-52/AaegyptiLVP_AGWG/gff/data/VectorBase-52_AaegyptiLVP_AGWG.gff) and [here](https://vectorbase.org/common/downloads/Legacy%20VectorBase%20Files/Aedes-aegypti/Aedes-aegypti-LVP_AGWG_REPEATFEATURES_AaegL5.gff3.gz)).  Once downloaded and decompressed, add their names to the variables `BASE_FEATURES_GFF3_FILENAME` and `REPEAT_FEATURES_GFF3_FILENAME` in `config.py`.  For example:
@@ -114,15 +120,17 @@ PREFERRED_ACCS = {'Aedes anphevirus':               ['gb|MH037149.1|'],
 
 ## Parameters
 
-### Root directory
-
-```
-ROOT_DIR = '/Volumes/Data/'
-```
+There are several ways to customize the execution of EVE.  These options are described in detail in the comments of [config.py](config.py).
 
 ## Usage
 
-> eve.py
+```
+eve.py
+```
+
+```
+insertsites.py
+```
 
 ## Directory structure and file names
 
@@ -136,12 +144,12 @@ In the following directory tree, `N` is used to represent the last in a series, 
 │   │   ├── <SPECIMEN 1>_unmapped_with_mates.bam
 │   │   ├── results
 │   │   │   ├── diagrams
-│   │   │   │   ├── <FAMILY 1>
+│   │   │   │   ├── <VIRUS_FAMILY 1>
 │   │   │   │   │   ├── <CONTIG 1>.pdf
 │   │   │   │   │   :
 │   │   │   │   │   └── <CONTIG N>.pdf
 │   │   │   │   :
-│   │   │   │   └── <FAMILY N>
+│   │   │   │   └── <VIRUS_FAMILY N>
 │   │   │   │       ├── 
 │   │   │   │       :   (as above)
 │   │   │   │       └── 
@@ -166,31 +174,37 @@ In the following directory tree, `N` is used to represent the last in a series, 
     ├── results.tsv
     └── viruses
         ├── diagrams
-        │   ├── <FAMILY 1>
-        │   │   ├── <FAMILY 1 VIRUS 1>_all.pdf
+        │   ├── <VIRUS_FAMILY 1>
+        │   │   ├── <VIRUS_FAMILY 1 VIRUS 1>_all.pdf
         │   │   :
-        │   │   └── <FAMILY 1 VIRUS N>_all.pdf
+        │   │   └── <VIRUS_FAMILY 1 VIRUS N>_all.pdf
         │   :
-        │   ├── <FAMILY N>
+        │   ├── <VIRUS_FAMILY N>
         │   │   ├── 
         │   │   :   (as above)
         │   │   └── 
         └── sequences
-            ├── <FAMILY 1>
-            │   ├── <FAMILY 1>_per_contig_aligned.fasta
-            │   ├── <FAMILY 1>_per_contig_unaligned.fasta
-            │   ├── <FAMILY 1>_per_specimen_aligned.fasta
-            │   ├── <FAMILY 1 SPECIMEN 1>_per_contig_aligned.fasta
-            │   ├── <FAMILY 1 SPECIMEN 1>_per_contig_unaligned.fasta
-            │   ├── <FAMILY 1 SPECIMEN 1>_per_contig_with_flanks.fasta
-            │   ├── <FAMILY 1 SPECIMEN 1>_per_specimen_aligned.fasta
+            ├── <VIRUS_FAMILY 1>
+            │   ├── <VIRUS_FAMILY 1>_per_contig_aligned.fasta
+            │   ├── <VIRUS_FAMILY 1>_per_contig_unaligned.fasta
+            │   ├── <VIRUS_FAMILY 1>_per_specimen_aligned.fasta
+            │   ├── <VIRUS_FAMILY 1 VIRUS 1>_per_contig_aligned.fasta
+            │   ├── <VIRUS_FAMILY 1 VIRUS 1>_per_contig_unaligned.fasta
+            │   ├── <VIRUS_FAMILY 1 VIRUS 1>_per_contig_with_flanks.fasta
+            │   ├── <VIRUS_FAMILY 1 VIRUS 1>_per_specimen_aligned.fasta
             │   :
-            │   ├── <FAMILY 1 SPECIMEN N>_per_contig_aligned.fasta
-            │   ├── <FAMILY 1 SPECIMEN N>_per_contig_unaligned.fasta
-            │   ├── <FAMILY 1 SPECIMEN N>_per_contig_with_flanks.fasta
-            │   └── <FAMILY 1 SPECIMEN N>_per_specimen_aligned.fasta
+            │   ├── <VIRUS_FAMILY 1 VIRUS N>_per_contig_aligned.fasta
+            │   ├── <VIRUS_FAMILY 1 VIRUS N>_per_contig_unaligned.fasta
+            │   ├── <VIRUS_FAMILY 1 VIRUS N>_per_contig_with_flanks.fasta
+            │   ├── <VIRUS_FAMILY 1 VIRUS N>_per_specimen_aligned.fasta
+            │   └clustered
+            │    ├── <VIRUS_FAMILY 1 VIRUS 1>_per_contig_aligned_clustered_k?.fasta
+            │    ├── <VIRUS_FAMILY 1 VIRUS 1>_per_contig_aligned_clustered_k?.txt
+            │    :
+            │    ├── <VIRUS_FAMILY 1 VIRUS N>_per_contig_aligned_clustered_k?.fasta
+            │    └── <VIRUS_FAMILY 1 VIRUS N>_per_contig_aligned_clustered_k?.txt
             :
-            └── <FAMILY N>
+            └── <VIRUS_FAMILY N>
                 ├── 
                 :   (as above)
                 └── 
