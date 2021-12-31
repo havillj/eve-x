@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from util import *
+from config import *
 from virushit import VirusHit
 from hosthit import HostHit
 from diagramhit import DiagramHits
@@ -136,7 +137,7 @@ def blastScaffolds(dirName, force = False):
     if not force and outVirusCSV.exists():
         writelog('   Skipping - ' + str(outVirusCSV) + ' exists.', True)
     else:
-        os.system('blastn -query ' + scaffoldsName 
+        os.system(BLAST_EXEC + ' -query ' + scaffoldsName 
                       + ' -db ' + VIRUS_DB 
                       + ' -num_threads 16'
                       + ' -task blastn' 
@@ -367,7 +368,7 @@ def getHits(dirName):
     for contig in virusHits:
         # search for host hits using megablast
         SeqIO.write(scaffoldRecords[contig], str(spadesPath / 'contig_temp.fasta'), 'fasta')
-        os.system('blastn -query ' + str(spadesPath / 'contig_temp.fasta')
+        os.system(BLAST_EXEC + ' -query ' + str(spadesPath / 'contig_temp.fasta')
                       + ' -db ' + HOST_DB 
                       + ' -num_threads 8'
                       + ' -evalue ' + str(config['EVALUE_HOST'])
@@ -544,7 +545,7 @@ def drawContigs(fileName):
        Return value: None
     """
     
-    diagramsPath = Path(DIAGRAMS_DIR)
+    diagramsPath = Path(fileName).parent.parent / 'diagrams'
     
     if not diagramsPath.exists():
         os.mkdir(str(diagramsPath))
@@ -1402,7 +1403,6 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showPlot,
 
     if not Path(VIRUSES_DIR).exists():
         os.system('mkdir ' + VIRUSES_DIR)
-    DIAGRAMS_DIR = VIRUSES_DIR + 'diagrams/'
     if not Path(DIAGRAMS_DIR).exists():
         os.system('mkdir ' + DIAGRAMS_DIR)
     FAMILY_DIR = DIAGRAMS_DIR + family
@@ -1756,7 +1756,6 @@ def main():
     writeConfig()
     
     doAll()
-    return
     
     consolidateAll()
     drawAll(False)

@@ -1,36 +1,63 @@
+import os
+import time
+from pathlib import Path
+
 """ 
-Configurable path and file names
---------------------------------
+   Configurable path and file names
+   --------------------------------
 """
 
 SPADES_EXEC = '/Volumes/Data/bin/SPAdes-3.14.1-Linux/bin/spades.py'
+BLAST_EXEC = '/usr/local/bin/blastn'
 
 ROOT_DIR = '/Volumes/Data2/'
 
-SPECIMENS_DIR = ROOT_DIR + 'specimens/' # path for specimens directories
-SPECIMEN_RESULTS_DIR = 'results'        # results subdirectory for each specimen
+"""
+   Specimen parameters
+   -------------------
+"""
 
-RESULTS_DIR = ROOT_DIR + 'results/'     # path for consolidated results
-VIRUSES_DIR = RESULTS_DIR + 'viruses/'  # path for per-virus results
-SEQUENCES_DIR = VIRUSES_DIR + 'sequences/'  # path for per-virus FASTA files
-DIAGRAMS_DIR = VIRUSES_DIR + 'diagrams/'    # path for per-virus diagrams
-
-GB_DIR = ROOT_DIR + 'gb/'
-FASTA_DIR = ROOT_DIR + 'fasta/'
+HOST_DB = 'aegyptidb'
+VIRUS_DB = 'virusdb'
 GFF3_DIR = ROOT_DIR + 'gff3/'
-FEATURE_TREES_PICKLED_FILENAME = ROOT_DIR + 'featuretrees.pickle'
+BASE_FEATURES_GFF3_FILENAME = GFF3_DIR + 'Aedes-aegypti-LVP_AGWG_BASEFEATURES_AaegL5.2.gff3'
+REPEAT_FEATURES_GFF3_FILENAME = GFF3_DIR + 'Aedes-aegypti-LVP_AGWG_REPEATFEATURES_AaegL5.gff3'
+CHR_NAMES = {'NC_035107.1': 'Chr1', 'NC_035108.1': 'Chr2', 'NC_035109.1': 'Chr3'}   # for diagrams
+CHR_NUMBERS = {'1': 'NC_035107.1', '2': 'NC_035108.1', '3': 'NC_035109.1', 'MT': 'NC_035159.1'} # for gff3 files
 
-FAMILY_CSV = ROOT_DIR + 'families.csv'
+""" 
+A dictionary used in the getSpecimenLabel function to determine the 
+population to which a particular specimen belongs.  If any of the strings 
+in the list corresponding to a particular key is contained in the specimen 
+name, then that key is used as the population name. 
+"""
 
-LOGFILE_DIR = ROOT_DIR + 'log/'
-LOGFILE_NAME = 'eve_' + time.strftime('%Y-%m-%d_%H:%M:%S') + '.log'
-LOGFILE_PATH = Path(LOGFILE_DIR) / LOGFILE_NAME 
-
-if 'logfile' not in globals():
-    if not Path(LOGFILE_DIR).exists():
-        os.system('mkdir ' + LOGFILE_DIR)
-    logFile = open(LOGFILE_PATH , 'w')
-
+POPULATIONS = {'Angola': ['Angola'], 
+               'Argentina': ['Argentina', 'US_U'], 
+               'Australia': ['Australia'], 
+               'Brazil': ['Brazil'], 
+               'French-Polynesia': ['FrenchPolynesia'],
+               'Gabon': ['Gabon'], 
+               'Mexico': ['Mexico'], 
+               'Philippines': ['Philippines'], 
+               'South-Africa': ['South_Africa'], 
+               'Thailand': ['Thailand'], 
+               'USA': ['USA', 'AZ'], 
+               'Vietnam': ['Vietnam']}
+               
+"""
+This dictionary is used to choose a preferred accession number if there are
+hits to multiple database sequences belonging to the same species.  For any
+species not in this dictionary, the accession number with the longest hit is
+chosen.
+"""
+               
+PREFERRED_ACCS = {'Aedes anphevirus':               ['gb|MH037149.1|'], 
+                  'Australian Anopheles totivirus': ['ref|NC_035674.1|'], 
+                  'Culex ohlsrhavirus':             ['ref|NC_035132.1|'], 
+                  'Phasi Charoen-like phasivirus':  ['ref|NC_038263.1|'], 
+                  'Wuhan Mosquito Virus 6':         ['gb|MF176251.1|']}
+                  
 """ 
 Configurable variables by function
 ----------------------------------
@@ -99,17 +126,17 @@ Configurable variables by function
        Pairs of matching flanking regions are applied to the limit first, then
        pairs of inverted flanking regions, then other host hits.
     
-    BEST_HITS_ONLY (boolean)
+    BEST_HITS_ONLY (True or False)
        If True, only draw the contig diagram for the viral hit determined to be 
        the "best hit".  Also used in consolidateAll.
        
     *** consolidateAll ***
     
-    OMIT_EVES_IN_REFERENCE (boolean)
+    OMIT_EVES_IN_REFERENCE (True or False)
        If True, EVEs determined to be present in the host reference genome will
        be omitted from the summary table and diagrams.
     
-    BEST_HITS_ONLY (boolean)
+    BEST_HITS_ONLY (True or False)
        If True, only the viral hit determined to be the "best hit" in each
        contig is included in the summary table and diagrams.
        
@@ -117,7 +144,7 @@ Configurable variables by function
        If fewer than this number of specimens are found to have a particular
        viral hit, then that virus is not shown in the summary table and diagrams.
     
-    DO_CLUSTERING (boolean)
+    DO_CLUSTERING (True or False)
        If True, cluster the aligned viral sequences.
        
     *** kmeans ***
@@ -141,7 +168,7 @@ Configurable variables by function
        This is the maximum distance in the host genome from a host hit to 
        search for annotated features in the host genome.
        
-     MIN_HITS_TO_SHOW_POSITION
+     MIN_HITS_TO_SHOW_POSITION (non-negative integer)
        In a cluster of viral hits, this is the minimum number of host hits that 
        must be found at a particular host location to show that location in the 
        insertpositions text file.
@@ -153,7 +180,7 @@ config = {'MIN_PIDENT': 80,
           'BEST_HITS_ONLY': True,
           'COMPLEXITY_CUTOFF': 0.75,
           'COMPLEXITY_K': 3,
-          'DO_CLUSTERING': False,
+          'DO_CLUSTERING': True,
           'EVALUE_HOST': 1e-10,
           'EVALUE_VIRUS': 1e-10,
           'FEATURE_SEARCH_DIST': 10000,
@@ -173,49 +200,33 @@ config = {'MIN_PIDENT': 80,
           'OVERLAP_FRACTION': 0.95}
 
 """
-Specimen parameters
+   The variable names below should not be changed unless you are confident
+   that you know what you are doing.
 """
 
-HOST_DB = 'aegyptidb'
-VIRUS_DB = 'virusdb'
-BASE_FEATURES_GFF3_FILENAME = GFF3_DIR + 'Aedes-aegypti-LVP_AGWG_BASEFEATURES_AaegL5.2.gff3'
-REPEAT_FEATURES_GFF3_FILENAME = GFF3_DIR + 'Aedes-aegypti-LVP_AGWG_REPEATFEATURES_AaegL5.gff3'
-CHR_NAMES = {'NC_035107.1': 'Chr1', 'NC_035108.1': 'Chr2', 'NC_035109.1': 'Chr3'}   # for diagrams
-CHR_NUMBERS = {'1': 'NC_035107.1', '2': 'NC_035108.1', '3': 'NC_035109.1', 'MT': 'NC_035159.1'} # for gff3 files
+SPECIMENS_DIR = ROOT_DIR + 'specimens/' # path for specimens directories
+SPECIMEN_RESULTS_DIR = 'results'        # results subdirectory for each specimen
 
-""" 
-A dictionary used in the getSpecimenLabel function to determine the 
-population to which a particular specimen belongs.  If any of the strings 
-in the list corresponding to a particular key is contained in the specimen 
-name, then that key is used as the population name. 
-"""
+RESULTS_DIR = ROOT_DIR + 'results/'     # path for consolidated results
+VIRUSES_DIR = RESULTS_DIR + 'viruses/'  # path for per-virus results
+SEQUENCES_DIR = VIRUSES_DIR + 'sequences/'  # path for per-virus FASTA files
+DIAGRAMS_DIR = VIRUSES_DIR + 'diagrams/'    # path for per-virus diagrams
 
-POPULATIONS = {'Angola': ['Angola'], 
-               'Argentina': ['Argentina', 'US_U'], 
-               'Australia': ['Australia'], 
-               'Brazil': ['Brazil'], 
-               'French-Polynesia': ['FrenchPolynesia'],
-               'Gabon': ['Gabon'], 
-               'Mexico': ['Mexico'], 
-               'Philippines': ['Philippines'], 
-               'South-Africa': ['South_Africa'], 
-               'Thailand': ['Thailand'], 
-               'USA': ['USA', 'AZ'], 
-               'Vietnam': ['Vietnam']}
-               
-"""
-This dictionary is used to choose a preferred accession number if there are
-hits to multiple database sequences belonging to the same species.  For any
-species not in this dictionary, the accession number with the longest hit is
-chosen.
-"""
-               
-PREFERRED_ACCS = {'Aedes anphevirus':               ['gb|MH037149.1|'], 
-                  'Australian Anopheles totivirus': ['ref|NC_035674.1|'], 
-                  'Culex ohlsrhavirus':             ['ref|NC_035132.1|'], 
-                  'Phasi Charoen-like phasivirus':  ['ref|NC_038263.1|'], 
-                  'Wuhan Mosquito Virus 6':         ['gb|MF176251.1|']}
-                  
+GB_DIR = ROOT_DIR + 'gb/'
+FASTA_DIR = ROOT_DIR + 'fasta/'
+FEATURE_TREES_PICKLED_FILENAME = ROOT_DIR + 'featuretrees.pickle'
+
+FAMILY_CSV = ROOT_DIR + 'families.csv'
+
+LOGFILE_DIR = ROOT_DIR + 'log/'
+LOGFILE_NAME = 'eve_' + time.strftime('%Y-%m-%d_%H:%M:%S') + '.log'
+LOGFILE_PATH = Path(LOGFILE_DIR) / LOGFILE_NAME 
+
+if 'logfile' not in globals():
+    if not Path(LOGFILE_DIR).exists():
+        os.system('mkdir ' + LOGFILE_DIR)
+    logFile = open(LOGFILE_PATH , 'w')
+    
 #'MIN_FLANKING_QSTART': 10        # min distance a flanking hit must be from either end of the contig  # REMOVE PROBABLY
 #'MAX_FLANKING_HITS': 10
 #'FIND_FEATURES': True

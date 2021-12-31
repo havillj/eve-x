@@ -211,7 +211,10 @@ def findClusters(fileName, omitFirst = True, minK = config['MIN_K'], maxK = conf
 
 #        print('\n  Best k = ' + str(k) + ' clusters:\n')
 
-    clusteredFileName = fileName.split('.fasta')[0] + '_clustered_k' + str(realK)
+    clusteredPath = Path(fileName).parent / 'clustered' 
+    if not clusteredPath.exists():
+        os.system('mkdir ' + str(clusteredPath))
+    clusteredFileName = str(clusteredPath / (Path(fileName).name.split('.fasta')[0] + '_clustered_k' + str(realK)))
     clusterNum = 1
     regionCounts = {}   
     outputText = open(clusteredFileName + '.txt', 'w')

@@ -21,9 +21,9 @@ import sys
 import time
 import urllib.request as web
 
-matplotlib.use('agg')
-
 from config import *
+
+matplotlib.use('agg')
 
 ###############################################################################
 
