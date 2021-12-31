@@ -47,10 +47,13 @@ FEATURE_TREES_PICKLED_FILENAME = ROOT_DIR + 'featuretrees.pickle'
 
 FAMILY_CSV = ROOT_DIR + 'families.csv'
 
+LOGFILE_DIR = ROOT_DIR + 'log/'
 LOGFILE_NAME = 'eve_' + time.strftime('%Y-%m-%d_%H:%M:%S') + '.log'
-LOGFILE_PATH = Path(ROOT_DIR) / LOGFILE_NAME 
+LOGFILE_PATH = Path(LOGFILE_DIR) / LOGFILE_NAME 
 
 if 'logfile' not in globals():
+    if not Path(LOGFILE_DIR).exists():
+        os.system('mkdir ' + LOGFILE_DIR)
     logFile = open(LOGFILE_PATH , 'w')
 
 """ 
@@ -308,6 +311,51 @@ def percentOverlap(iv1, iv2):
     
     return max(0, min(iv1[1], iv2[1]) - max(iv1[0], iv2[0])) / (iv1[1] - iv1[0])
 
+###############################################################################
+
+def getSeqRecord(fileNameFASTA, seqid):
+    try:
+        refFile = open(fileNameFASTA, 'r')
+    except:
+        prefix1 = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
+        prefix2 = '?db=nuccore&id='
+        suffix = '&rettype=fasta&retmode=text'
+        url = prefix1 + prefix2 + seqid + suffix
+        try:
+            fastaFile = web.urlopen(url)
+        except:
+            writelog('Error getting reference sequence ' + seqid + ' from NCBI.  Aligned FASTA file not created.')
+            return None
+        fastaText = fastaFile.read().decode('utf-8')
+        fastaFile.close()
+        refFile = open(fileNameFASTA, 'w')
+        refFile.write(fastaText)
+        refFile.close()
+        refFile = open(fileNameFASTA, 'r')
+        
+    refRecord = SeqIO.read(refFile, 'fasta')
+    refFile.close()
+    
+    return refRecord
+    
+def getGenBank(accessionID):
+	"""
+	Query NCBI to get a gb file.
+	"""
+	
+	Entrez.email = 'havill@denison.edu'
+	try:
+		handle = Entrez.efetch(db = 'nucleotide', id = accessionID, rettype = 'gb', retmode = 'text')
+	except:
+		writelog('Error retrieving GenBank record for ' + accessionID + ': ' + sys.exc_info()[1] + '\nDiagram not created.')
+		return False
+		
+	gbFile = open(GB_DIR + accessionID + '.gb', 'w')
+	gbFile.write(handle.read())
+	gbFile.close()
+	
+	return True
+    
 ###############################################################################
 
 def getFamily(accessionID):

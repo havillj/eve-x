@@ -1,9 +1,9 @@
-class Hit:
+class DiagramHit:
     def __init__(self, pos = [], overlap = False, primary = True, data = None):
         self._pos = pos
         self._overlap = overlap
         self._primary = primary
-        self._data = data
+        self._data = data         # reference overlap regions
         
     def doesOverlap(self):
         return self._overlap
@@ -40,12 +40,12 @@ class Hit:
                 return True
         return False
         
-class Hits:
+class DiagramHits:
     def __init__(self):
         self._hits = []   # list of hits
         
     def addHit(self, pos, overlap = False, primary = True, data = None):
-        self._hits.append(Hit(pos, overlap, primary, data))
+        self._hits.append(DiagramHit(pos, overlap, primary, data))
         
     def addHits(self, otherHitsList):
         self._hits.extend(otherHitsList)
