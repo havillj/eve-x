@@ -1,7 +1,5 @@
 # EVE
 
-## Installation
-
 ## Dependencies
 
 ### Python modules
