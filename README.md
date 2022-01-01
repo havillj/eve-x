@@ -2,7 +2,7 @@
 
 ## Installation
 
-## Set Up and Dependencies
+## Dependencies
 
 ### Python modules
 
@@ -15,7 +15,7 @@ EVE is written in Python 3 (version 3.6 or later) and requires the following non
 - numpy
 - pysam
 
-They should be easily installed using `pip` (or `pip3`).  For example:
+They should be easy to install using `pip` (or `pip3`).  For example:
 
 ```
 pip3 install biopython
@@ -23,7 +23,7 @@ pip3 install biopython
 
 ### Samtools
 
-Samtools can be at http://www.htslib.org.
+Samtools can be found at http://www.htslib.org.
 
 Once installed, assign the path to `samtools` to the variable `SAMTOOLS_EXEC` in `config.py`.  For example:
 
@@ -51,7 +51,21 @@ Once installed, assign the path to the `blastn` executable to the variable `BLAS
 BLAST_EXEC = '/usr/local/bin/blastn'
 ```
 
-You will also need two BLAST nucleotide databases: 
+## Set up
+
+### Directories
+
+The following three directories should be specified in `config.py`:
+
+```
+ROOT_DIR = '/Volumes/Data/'              # root directory where all data files related to EVE will be located
+SPECIMENS_DIR = ROOT_DIR + 'specimens/'  # path for original specimen BAM files
+RESULTS_DIR = ROOT_DIR + 'results/'      # path for all results (see Directory structure section below for details)
+```
+
+### BLAST databases
+
+You will need two BLAST nucleotide databases: 
 - one containing the virus sequences for which you wish to search and
 - one containing the host reference genome
 
@@ -78,12 +92,6 @@ To make diagrams more readable, also edit the variable `CHR_NAMES` in `config.py
 
 ```
 CHR_NAMES = {'NC_035107.1': 'Chr1', 'NC_035108.1': 'Chr2', 'NC_035109.1': 'Chr3'}
-```
-
-### Root directory
-
-```
-ROOT_DIR = '/Volumes/Data/'
 ```
 
 ### Host genome features
@@ -152,39 +160,43 @@ In the following directory tree, `N` is used to represent the last in a series, 
 ```
 <ROOT_DIR>
 ├── specimens
-│   ├── <SPECIMEN 1>
-│   │   ├── <SPECIMEN 1>.sorted.deduped.merged.bam
-│   │   ├── <SPECIMEN 1>_unmapped_with_mates.bam
-│   │   ├── results
-│   │   │   ├── diagrams
-│   │   │   │   ├── <VIRUS_FAMILY 1>
-│   │   │   │   │   ├── <CONTIG 1>.pdf
-│   │   │   │   │   :
-│   │   │   │   │   └── <CONTIG N>.pdf
-│   │   │   │   :
-│   │   │   │   └── <VIRUS_FAMILY N>
-│   │   │   │       ├── 
-│   │   │   │       :   (as above)
-│   │   │   │       └── 
-│   │   │   ├── scaffolds
-│   │   │   │   ├── blast_scaffolds.csv
-│   │   │   │   └── scaffolds.fasta
-│   │   │   ├── sequences
-│   │   │   │   ├── <SPECIMEN 1>_hits_aligned.fasta
-│   │   │   │   └── <SPECIMEN 1>_hits_unaligned.fasta
-│   │   │   └── xml
-│   │   │       └── <SPECIMEN 1>_hits.xml
-│   │   └── spades
-│   │       ├──
-│   │       :   (SPAdes work files)
-│   │       └── 
-│   └── <SPECIMEN N>
-│       ├── 
-│       :   (as above)
-│       └──
+│   ├── <SPECIMEN 1>.bam
+│   :
+│   └── <SPECIMEN N>.bam
 │   
 └── results
     ├── results.tsv
+    ├── specimens
+    │   ├── <SPECIMEN 1>
+    │   │   ├── <SPECIMEN 1>_unmapped_with_mates.bam
+    │   │   ├── diagrams
+    │   │   │   ├── <VIRUS_FAMILY 1>
+    │   │   │   │   ├── <CONTIG 1>.pdf
+    │   │   │   │   :
+    │   │   │   │   └── <CONTIG N>.pdf
+    │   │   │   :
+    │   │   │   └── <VIRUS_FAMILY N>
+    │   │   │       ├── 
+    │   │   │       :   (as above)
+    │   │   │       └── 
+    │   │   ├── scaffolds
+    │   │   │   ├── blast_scaffolds.csv
+    │   │   │   └── scaffolds.fasta
+    │   │   ├── sequences
+    │   │   │   ├── <SPECIMEN 1>_hits_aligned.fasta
+    │   │   │   └── <SPECIMEN 1>_hits_unaligned.fasta
+    │   │   ├── xml
+    │   │   │   └── <SPECIMEN 1>_hits.xml
+    │   │   └── spades
+    │   │       ├──
+    │   │       :   (SPAdes work files)
+    │   │       └── 
+    │   :
+    │   └── <SPECIMEN N>
+    │       ├── 
+    │       :   (as above)
+    │       └──
+    │
     └── viruses
         ├── diagrams
         │   ├── <VIRUS_FAMILY 1>
@@ -192,10 +204,10 @@ In the following directory tree, `N` is used to represent the last in a series, 
         │   │   :
         │   │   └── <VIRUS_FAMILY 1 VIRUS N>_all.pdf
         │   :
-        │   ├── <VIRUS_FAMILY N>
-        │   │   ├── 
-        │   │   :   (as above)
-        │   │   └── 
+        │   └── <VIRUS_FAMILY N>
+        │       ├── 
+        │       :   (as above)
+        │       └── 
         └── sequences
             ├── <VIRUS_FAMILY 1>
             │   ├── <VIRUS_FAMILY 1>_per_contig_aligned.fasta
@@ -210,12 +222,12 @@ In the following directory tree, `N` is used to represent the last in a series, 
             │   ├── <VIRUS_FAMILY 1 VIRUS N>_per_contig_unaligned.fasta
             │   ├── <VIRUS_FAMILY 1 VIRUS N>_per_contig_with_flanks.fasta
             │   ├── <VIRUS_FAMILY 1 VIRUS N>_per_specimen_aligned.fasta
-            │   └clustered
-            │    ├── <VIRUS_FAMILY 1 VIRUS 1>_per_contig_aligned_clustered_k?.fasta
-            │    ├── <VIRUS_FAMILY 1 VIRUS 1>_per_contig_aligned_clustered_k?.txt
-            │    :
-            │    ├── <VIRUS_FAMILY 1 VIRUS N>_per_contig_aligned_clustered_k?.fasta
-            │    └── <VIRUS_FAMILY 1 VIRUS N>_per_contig_aligned_clustered_k?.txt
+            │   └── clustered
+            │       ├── <VIRUS_FAMILY 1 VIRUS 1>_per_contig_aligned_clustered_k?.fasta
+            │       ├── <VIRUS_FAMILY 1 VIRUS 1>_per_contig_aligned_clustered_k?.txt
+            │       :
+            │       ├── <VIRUS_FAMILY 1 VIRUS N>_per_contig_aligned_clustered_k?.fasta
+            │       └── <VIRUS_FAMILY 1 VIRUS N>_per_contig_aligned_clustered_k?.txt
             :
             └── <VIRUS_FAMILY N>
                 ├── 
