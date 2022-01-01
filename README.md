@@ -23,7 +23,7 @@ pip3 install biopython
 
 ### Samtools
 
-Samtools can be found at http://www.htslib.org.
+Samtools can be found [here](http://www.htslib.org).
 
 Once installed, assign the path to `samtools` to the variable `SAMTOOLS_EXEC` in `config.py`.  For example:
 
@@ -33,7 +33,7 @@ SAMTOOLS_EXEC = '/usr/bin/samtools'
 
 ### SPAdes
 
-The SPAdes assembler is available at https://cab.spbu.ru/software/spades/.
+The SPAdes assembler is available [here](https://cab.spbu.ru/software/spades/).
 
 Once installed, assign the path to `spades.py` to the variable `SPADES_EXEC` in `config.py`.  For example:
 
@@ -43,7 +43,7 @@ SPADES_EXEC = '/usr/local/bin/spades.py'
 
 ### BLAST
 
-BLAST can be downloaded from https://blast.ncbi.nlm.nih.gov/Blast.cgi?PAGE_TYPE=BlastDocs&DOC_TYPE=Download.
+BLAST can be downloaded [here](https://blast.ncbi.nlm.nih.gov/Blast.cgi?PAGE_TYPE=BlastDocs&DOC_TYPE=Download).
 
 Once installed, assign the path to the `blastn` executable to the variable `BLAST_EXEC` in `config.py`.  For example:
 
