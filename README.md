@@ -150,7 +150,17 @@ To run EVE on the specimen files in the directory `SPECIMENS_DIR`, simply execut
 python3 eve.py
 ```
 
-This will generate many files following the directory structure in the [next section](#directory-structure).
+Any of the options in the dictionary `config` in `config.py` may be specified on the command line in the form
+```
+python3 eve.py --OPTION1=VALUE1 --OPTION2=VALUE2 ...
+```
+
+For example:
+```
+python3 eve.py --DO_CLUSTERING=False --MIN_HITS_TO_SHOW_VIRUS=4
+```
+
+EVE will generate many files following the directory structure in the [next section](#directory-structure).
 
 If you wish, you can manually adjust any of the clustered aligned sequence files and then run
 
