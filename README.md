@@ -21,6 +21,16 @@ They should be easily installed using `pip` (or `pip3`).  For example:
 pip3 install biopython
 ```
 
+### Samtools
+
+Samtools can be at http://www.htslib.org.
+
+Once installed, assign the path to `samtools` to the variable `SAMTOOLS_EXEC` in `config.py`.  For example:
+
+```
+SAMTOOLS_EXEC = '/usr/bin/samtools'
+```
+
 ### SPAdes
 
 The SPAdes assembler is available at https://cab.spbu.ru/software/spades/.
@@ -93,6 +103,8 @@ CHR_NUMBERS = {'1': 'NC_035107.1', '2': 'NC_035108.1', '3': 'NC_035109.1', 'MT':
 ```
 ### Specimen populations
 
+If your specimens come from different populations, you can specify those by editing the `POPULATIONS` dictionary in `config.py`.  The keys are the names of the populations and the values are patterns that appear in the file names of specimens from those populations.  For example, in the following, the region `'USA'` is assigned to any specimen containing either `'USA'` or `'AZ'` in its file name.
+
 ```
 POPULATIONS = {'Angola': ['Angola'], 
                'Argentina': ['Argentina', 'US_U'], 
@@ -109,6 +121,8 @@ POPULATIONS = {'Angola': ['Angola'],
 ```
 ### Preferred virus accession numbers
 
+Since there are commonly many genomic sequences in a viral database corresponding to the same viral species, EVE only retains hits from one representative of a species in each contig.  You can optionally specify a preferred accession number for each species by editing the `PREFERRED_ACCS` variable in `config.py`.  For example:
+
 ```
 PREFERRED_ACCS = {'Aedes anphevirus':               ['gb|MH037149.1|'], 
                   'Australian Anopheles totivirus': ['ref|NC_035674.1|'], 
@@ -116,7 +130,6 @@ PREFERRED_ACCS = {'Aedes anphevirus':               ['gb|MH037149.1|'],
                   'Phasi Charoen-like phasivirus':  ['ref|NC_038263.1|'], 
                   'Wuhan Mosquito Virus 6':         ['gb|MF176251.1|']}
 ```
-
 
 ## Parameters
 
