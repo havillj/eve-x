@@ -60,8 +60,10 @@ The following three directories should be specified in `config.py`:
 ```
 ROOT_DIR = '/Volumes/Data/'              # root directory where all data files related to EVE will be located
 SPECIMENS_DIR = ROOT_DIR + 'specimens/'  # path for original specimen BAM files
-RESULTS_DIR = ROOT_DIR + 'results/'      # path for all results (see Directory structure section below for details)
+RESULTS_DIR = ROOT_DIR + 'results/'      # path for all results
 ```
+
+See the [Directory structure](#directory-structure) section below for details on the contents of the `RESULTS_DIR` directory.
 
 ### BLAST databases
 
@@ -153,7 +155,7 @@ eve.py
 insertsites.py
 ```
 
-## Directory structure and file names
+## Directory structure
 
 In the following directory tree, `N` is used to represent the last in a series, not any particular number.
 
