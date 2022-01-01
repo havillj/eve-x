@@ -265,12 +265,8 @@ def getHits(dirName):
     writelog('Combining BLAST results to locate putative EVEs...', True)
     
     spadesPath = Path(dirName) / SPADES_DIR              # specimen assembly dir
-    
-    resultsPath = Path(dirName) / SPECIMEN_RESULTS_DIR   # specimen results dir
-    if not resultsPath.exists():
-        os.system('mkdir ' + str(resultsPath))
         
-    scaffoldsPath = resultsPath / SCAFFOLDS_DIR
+    scaffoldsPath = Path(dirName) / SCAFFOLDS_DIR
     if not scaffoldsPath.exists():
         os.system('mkdir ' + str(scaffoldsPath))
         
@@ -279,7 +275,7 @@ def getHits(dirName):
     scaffoldsFilename = str(scaffoldsPath / 'scaffolds.fasta')
     csvVirusFilename = str(scaffoldsPath / 'blast_scaffolds.csv')
     
-    xmlPath = resultsPath / XML_DIR
+    xmlPath = Path(dirName) / XML_DIR
     if not xmlPath.exists():
         os.system('mkdir ' + str(xmlPath))
     xmlFilename = str(xmlPath / (Path(dirName).name + '_hits.xml'))
@@ -936,14 +932,16 @@ def consolidateAll():
     refSeqs = {}
     pIdents = {}
     
-    xmlFiles = []
-    specimensPath = Path(SPECIMENS_RESULTS_DIR)
-    for specimenDir in specimensPath.iterdir():
-        if specimenDir.name[0] != '.':
-            for file in (specimenDir / XML_DIR).iterdir():
-                if (file.name[0] != '.') and ('_hits.xml' in file.name):
-                    xmlFiles.append(file.resolve())
-    xmlFiles.sort()
+#     xmlFiles = []
+#     specimensPath = Path(SPECIMEN_RESULTS_DIR)
+#     for specimenDir in specimensPath.iterdir():
+#         if specimenDir.name[0] != '.':
+#             for file in (specimenDir / XML_DIR).iterdir():
+#                 if (file.name[0] != '.') and ('_hits.xml' in file.name):
+#                     xmlFiles.append(file.resolve())
+#     xmlFiles.sort()
+
+    xmlFiles = sorted(Path(SPECIMEN_RESULTS_DIR).rglob('*.xml'))
     
     specimen2Label = {}
     label2Specimen = {}
@@ -1579,7 +1577,7 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showPlot,
 
 def getHitsForDiagram():
     writelog('  Reading hits for diagrams ...', True)
-    dir = Path(SPECIMENS_RESULTS_DIR)
+    dir = Path(SPECIMEN_RESULTS_DIR)
     subdirs = [d for d in dir.iterdir()]
     files = [d / XML_DIR / (d.name + '_hits.xml') for d in subdirs]
     files.sort()

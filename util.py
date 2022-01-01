@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('agg')
 from Bio import SeqIO, Entrez, AlignIO
 from Bio.Align import MultipleSeqAlignment
 from Bio.SeqFeature import SeqFeature, FeatureLocation
@@ -8,8 +10,6 @@ from multiprocessing import Process
 from pathlib import Path
 import copy
 import math
-import matplotlib
-matplotlib.use('agg')
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as pyplot
 import numpy as np

@@ -21,24 +21,16 @@ def removeRuns(values):
     return newValues
     
 def getFlanks(specimen, contigName, leftStart, leftEnd, rightStart, rightEnd):
-    scaffoldsFilename = str(Path(SPECIMENS_DIR) / (specimen + '/' + SPECIMEN_RESULTS_DIR + '/scaffolds/scaffolds.fasta'))
+    scaffoldsFilename = str(Path(SPECIMEN_RESULTS_DIR) / specimen / SCAFFOLDS_DIR / 'scaffolds.fasta')
     scaffoldRecords = SeqIO.index(scaffoldsFilename, 'fasta')
     contigRecord = scaffoldRecords[contigName]
     seq = str(contigRecord.seq)
     return seq[leftStart - 1:leftEnd], seq[rightStart - 1:rightEnd]  # account for 1-based indexing
 
-def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
+def getInsertSites(findFeatures, desiredSeqIDs = None, bestHitsOnly = True):
     '''bestHitsOnly must match value given to getHits that created these xml files.'''
     
-    xmlFiles = []
-    specimensPath = Path(SPECIMENS_DIR)
-    for specimenDir in specimensPath.iterdir():
-        if specimenDir.name[0] != '.':
-            for file in (specimenDir / (SPECIMEN_RESULTS_DIR + '/xml')).iterdir():
-#                if (file.name[0] != '.') and (('_hits_features.xml' in file.name) or (('_hits.xml' in file.name) and not Path(str(file)[:-4] + '_features.xml').exists())):
-                if (file.name[0] != '.') and file.name.endswith('_hits.xml'):
-                    xmlFiles.append(file.resolve())
-    xmlFiles.sort()
+    xmlFiles = sorted(Path(SPECIMEN_RESULTS_DIR).rglob('*.xml'))
     
     insertSites = {}
     
@@ -50,7 +42,7 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
         region = region.replace(' ', '-')
         specimen2Label[specimen] = (region, num)
         
-        writelog('  Processing ' + str(specimenCount) + '/' + str(len(xmlFiles)) + ': ' + specimen, True)
+        writelog('Processing ' + str(specimenCount) + '/' + str(len(xmlFiles)) + ': ' + specimen, True)
         
         specimenCount += 1
 
@@ -93,19 +85,18 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
                 v = element
                 host_qstart = int(v.find('qstart').text)
                 host_qend = int(v.find('qend').text)
-#                if (-ALLOWED_OVERLAP <= virus_qstart - host_qend <= config['MAX_HOST_VIRUS_DISTANCE'])) or (-ALLOWED_OVERLAP <= host_qstart - virus_qend <= config['MAX_HOST_VIRUS_DISTANCE'])):
-                if (virus_qstart - host_qend <= config['MAX_HOST_VIRUS_DISTANCE'])) or (host_qstart - virus_qend <= config['MAX_HOST_VIRUS_DISTANCE'])):
+                if (virus_qstart - host_qend <= config['MAX_HOST_VIRUS_DISTANCE']) or (host_qstart - virus_qend <= config['MAX_HOST_VIRUS_DISTANCE']):
                     chrSeqID = v.attrib['seqid']
                     sstart = int(v.find('sstart').text)
                     send = int(v.find('send').text)
                     if sstart < send:
-                        if FIND_FEATURES:
+                        if findFeatures:
                             site = (chrSeqID, send, searchiTrees(chrSeqID, send - config['FEATURE_SEARCH_DIST'], send), virus_qstart - host_qend, (virus_sstart, virus_send))
                         else:
                             site = (chrSeqID, send, [], virus_qstart - host_qend, (virus_sstart, virus_send))
                         insertSites[seqid][specimen][contigName]['left'].append(site)
                     else:  # this is actually a right flanking region
-                        if FIND_FEATURES:
+                        if findFeatures:
                             site = (chrSeqID, send, searchiTrees(chrSeqID, send, send + config['FEATURE_SEARCH_DIST']), virus_qstart - host_qend, (virus_send, virus_sstart))
                         else:
                             site = (chrSeqID, send, [], virus_qstart - host_qend, (virus_send, virus_sstart))
@@ -115,19 +106,18 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
                 v = element
                 host_qstart = int(v.find('qstart').text)
                 host_qend = int(v.find('qend').text)
-#                if (-ALLOWED_OVERLAP <= virus_qstart - host_qend <= config['MAX_HOST_VIRUS_DISTANCE'])) or (-ALLOWED_OVERLAP <= host_qstart - virus_qend <= config['MAX_HOST_VIRUS_DISTANCE'])):
-                if (virus_qstart - host_qend <= config['MAX_HOST_VIRUS_DISTANCE'])) or (host_qstart - virus_qend <= config['MAX_HOST_VIRUS_DISTANCE'])):
+                if (virus_qstart - host_qend <= config['MAX_HOST_VIRUS_DISTANCE']) or (host_qstart - virus_qend <= config['MAX_HOST_VIRUS_DISTANCE']):
                     chrSeqID = v.attrib['seqid']
                     sstart = int(v.find('sstart').text)
                     send = int(v.find('send').text)
                     if sstart < send:
-                        if FIND_FEATURES:
+                        if findFeatures:
                             site = (chrSeqID, sstart, searchiTrees(chrSeqID, sstart, sstart + config['FEATURE_SEARCH_DIST']), host_qstart - virus_qend, (virus_sstart, virus_send))
                         else:
                             site = (chrSeqID, sstart, [], host_qstart - virus_qend, (virus_sstart, virus_send))
                         insertSites[seqid][specimen][contigName]['right'].append(site)
                     else:  # this is actually a left flanking region
-                        if FIND_FEATURES:
+                        if findFeatures:
                             site = (chrSeqID, sstart, searchiTrees(chrSeqID, sstart - config['FEATURE_SEARCH_DIST'], sstart), host_qstart - virus_qend, (virus_send, virus_sstart))
                         else:
                             site = (chrSeqID, sstart, [], host_qstart - virus_qend, (virus_send, virus_sstart))
@@ -148,7 +138,7 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
                     vse = (virus_send, virus_sstart)
                 else:
                     vse = (virus_sstart, virus_send)
-                if FIND_FEATURES:
+                if findFeatures:
                     site = (chrSeqID, (sstart, send), searchiTrees(chrSeqID, sstart, send), overlap, flanks, vse)
                 else:
                     site = (chrSeqID, (sstart, send), [], overlap, flanks, vse)
@@ -226,26 +216,7 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
                         featuresRight = removeSite(insertSites[seqid][specimen][contigName]['left'], (v.attrib['seqid'], rightStart)) + \
                                         removeSite(insertSites[seqid][specimen][contigName]['right'], (v.attrib['seqid'], rightStart))
                         break
-                
-#                 if (leftStart < leftEnd) and (rightStart < rightEnd):
-#                     if rightStart < leftEnd:
-#                         overlap = (rightStart, leftEnd)
-#                         flankLength = leftEnd - rightStart + 1
-#                         flanks = getFlanks(specimen, contigName.split('__')[0], leftQEnd - flankLength + 1, leftQEnd, rightQStart, rightQStart + flankLength - 1)
-#                         flanks += (virus_qstart - leftQEnd - 1, rightQStart - virus_qend - 1)
-#                     else:
-#                         overlap = None
-#                         flanks = ('', '', virus_qstart - leftQEnd - 1, rightQStart - virus_qend - 1)
-#                 else:  # if (leftStart > leftEnd) and (rightStart > rightEnd):
-#                     if rightStart > leftEnd:
-#                         overlap = (leftEnd, rightStart)
-#                         flankLength = rightStart - leftEnd + 1
-#                         flanks = getFlanks(specimen, contigName.split('__')[0], leftQEnd - flankLength + 1, leftQEnd, rightQStart, rightQStart + flankLength - 1)
-#                         flanks = (reverseComplement(flanks[1]), reverseComplement(flanks[0]), rightQStart - virus_qend - 1, virus_qstart - leftQEnd - 1)
-#                     else:
-#                         overlap = None
-#                         flanks = ('', '', rightQStart - virus_qend - 1, virus_qstart - leftQEnd - 1)
-                
+                                
                 overlap = None
                 flanks = ('', '', virus_qstart - leftQEnd - 1, rightQStart - virus_qend - 1)
                 if leftEnd > rightStart:
@@ -258,45 +229,19 @@ def getInsertSites(desiredSeqIDs = None, bestHitsOnly = True):
                 
                 insertSites[seqid][specimen][contigName][element.tag].append((v.attrib['seqid'], (leftEnd, rightStart), features, overlap, flanks, vse))
 
-
-            # elif not skip and element.tag == 'inversion':
-#                 match = element
-#                 for v in vectorHitsLeft:
-#                     if v.attrib['id'] == match.attrib['leftid']:
-#                         matchLeft = int(v.find('send').text)
-#                         try:
-#                             insertSites[seqid][specimen][contigName]['left'].remove((v.attrib['seqid'], matchLeft))
-#                         except ValueError:
-#                             pass
-#                         try:
-#                             insertSites[seqid][specimen][contigName]['right'].remove((v.attrib['seqid'], matchLeft))
-#                         except ValueError:
-#                             pass
-#                         break
-#                 for v in vectorHitsRight:
-#                     if v.attrib['id'] == match.attrib['rightid']:
-#                         matchRight = int(v.find('sstart').text)
-#                         try:
-#                             insertSites[seqid][specimen][contigName]['left'].remove((v.attrib['seqid'], matchRight))
-#                         except ValueError:
-#                             pass
-#                         try:
-#                             insertSites[seqid][specimen][contigName]['right'].remove((v.attrib['seqid'], matchRight))
-#                         except ValueError:
-#                             pass
-#                         insertSites[seqid][specimen][contigName]['inversion'].append((v.attrib['seqid'], (matchLeft, matchRight)))
-#                         break
-
     return insertSites, specimen2Label
        
-def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFastaName, bestHitsOnly = True):
+def drawInsertSites(clusteredFileName, seqids, omitFirst, findFeatures, maxDist, bestHitsOnly = True):
     if not Path(clusteredFileName).exists():
         writelog('File does not exist: ' + clusteredFileName, True)
         return
         
+    unalignedFastaName = str(Path(clusteredFileName).resolve().parent.parent / (Path(clusteredFileName).name.split('_aligned_clustered')[0] + '_unaligned.fasta'))
+    withFlanksFastaName = str(Path(clusteredFileName).resolve().parent.parent / (Path(clusteredFileName).name.split('_aligned_clustered')[0] + '_with_flanks.fasta'))
+        
     paramOmitFirst = omitFirst
     if seqids is None:
-        seqids = []
+        seqids = set()
         for record in SeqIO.parse(clusteredFileName, 'fasta'):
             if omitFirst:
                 omitFirst = False
@@ -308,21 +253,18 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
             else:
                 seqid = parts[3].split('.')[0]
                 seqid += parts[3].split(seqid)[1][:2]
-            seqids.append(seqid)
+            seqids.add(seqid)
         
         omitFirst = paramOmitFirst
-        
-    lengths = {'NC_035107.1': 310827022, 'NC_035108.1': 474425716, 'NC_035109.1': 409777670}
-    chromNumber = {'NC_035107.1': 1, 'NC_035108.1': 2, 'NC_035109.1': 3}
     
-    insertSites, specimen2Label = getInsertSites(list(set(seqids)), bestHitsOnly)
+    insertSites, specimen2Label = getInsertSites(findFeatures, seqids, bestHitsOnly)
     
     y = 0
-    yvalues = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-    xvalues = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
+    yvalues = {}
+    xvalues = {}
     ylabels  = []
-    colors = {} # {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-    positions = {} # {'NC_035107.1': {}, 'NC_035108.1': {}, 'NC_035109.1': {}}
+    colors = {}
+    positions = {}
     features = {}
     pidents = {}
     totalClusterPidents = {}
@@ -351,12 +293,12 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
         ylabels.append(cluster + ' ' + region + ' ' + str(num) + ' ' + contig)
         
         if cluster not in yvalues:
-            yvalues[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-            xvalues[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-            colors[cluster] = {'NC_035107.1': [], 'NC_035108.1': [], 'NC_035109.1': []}
-            positions[cluster] = {'NC_035107.1': {}, 'NC_035108.1': {}, 'NC_035109.1': {}}
-            features[cluster] = {'NC_035107.1': {}, 'NC_035108.1': {}, 'NC_035109.1': {}}
-            pidents[cluster] = {'NC_035107.1': {}, 'NC_035108.1': {}, 'NC_035109.1': {}}
+            yvalues[cluster] = {chr: [] for chr in CHR_NAMES}
+            xvalues[cluster] = {chr: [] for chr in CHR_NAMES}
+            colors[cluster] = {chr: [] for chr in CHR_NAMES}
+            positions[cluster] = {chr: {} for chr in CHR_NAMES}
+            features[cluster] = {chr: {} for chr in CHR_NAMES}
+            pidents[cluster] = {chr: {} for chr in CHR_NAMES}
             totalClusterPidents[cluster] = 0
             totalClusterSize[cluster] = 0
             clusterCounts[cluster] = {}
@@ -374,7 +316,7 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
         totalClusterSize[cluster] += 1
         
         for chromID, position, feat, dist, vse in insertSites[seqid][specimen][contig]['left']:
-            if chromID in lengths:
+            if chromID in CHR_NAMES:
                 yvalues[cluster][chromID].append(y)
                 xvalues[cluster][chromID].append(position)
                 colors[cluster][chromID].append('#87a96b')    # green/asparagus
@@ -386,7 +328,7 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
                 features[cluster][chromID][position].append((feat, [], []))
                 pidents[cluster][chromID][position] += pident
         for chromID, position, feat, dist, vse in insertSites[seqid][specimen][contig]['right']:
-            if chromID in lengths:
+            if chromID in CHR_NAMES:
                 yvalues[cluster][chromID].append(y)
                 xvalues[cluster][chromID].append(position)
                 colors[cluster][chromID].append('#ff2600')       # red
@@ -398,11 +340,7 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
                 features[cluster][chromID][position].append(([], feat, []))
                 pidents[cluster][chromID][position] += pident
         for chromID, position, feat, overlap, flanks, vse in insertSites[seqid][specimen][contig]['match']:
-            if chromID in lengths:
-#                 if position[0] > position[1]:
-#                     position = position[::-1]
-#                     flanks[0], flanks[1] = reverseComplement(flanks[1]), reverseComplement(flanks[0])
-#                     flanks[2], flanks[3] = flanks[3], flanks[2]
+            if chromID in CHR_NAMES:
                 yvalues[cluster][chromID].append(y)
                 xvalues[cluster][chromID].append(position[0])
                 colors[cluster][chromID].append('#ff40ff')   # magenta
@@ -414,11 +352,7 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
                 features[cluster][chromID][position].append(feat)
                 pidents[cluster][chromID][position] += pident
         for chromID, position, feat, overlap, flanks, vse in insertSites[seqid][specimen][contig]['inversion']:
-            if chromID in lengths:
-#                 if position[0] > position[1]:
-#                     position = position[::-1]
-#                     flanks[0], flanks[1] = reverseComplement(flanks[1]), reverseComplement(flanks[0])
-#                     flanks[2], flanks[3] = flanks[3], flanks[2]
+            if chromID in CHR_NAMES:
                 yvalues[cluster][chromID].append(y)
                 xvalues[cluster][chromID].append(position[0])
                 colors[cluster][chromID].append('#5e5e5e')       # dark gray
@@ -430,10 +364,7 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
                 features[cluster][chromID][position].append(feat)
                 pidents[cluster][chromID][position] += pident
         for chromID, position, feat, overlap, flanks, vse in insertSites[seqid][specimen][contig]['referenceoverlaps']:
-            if chromID in lengths:
-#                 if position[0] > position[1]:
-#                     position = position[::-1]
-#                     flanks[2], flanks[3] = flanks[3], flanks[2]
+            if chromID in CHR_NAMES:
                 yvalues[cluster][chromID].append(y)
                 xvalues[cluster][chromID].append(position[0])
                 colors[cluster][chromID].append('#ff40ff')   # same as match
@@ -446,60 +377,32 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
                 pidents[cluster][chromID][position] += pident
         y += 1
         
-    fig, ax = pyplot.subplots(1, 3, sharey = True, figsize = (7, 10), gridspec_kw = {'width_ratios': [1, lengths['NC_035108.1']/lengths['NC_035107.1'], lengths['NC_035109.1']/lengths['NC_035107.1']]})
+    minChromLength = min(CHR_LENGTHS.values())
+    widthRatios = [CHR_LENGTHS[chr] / minChromLength for chr in CHR_LENGTHS]
+    fig, ax = pyplot.subplots(1, 3, sharey = True, figsize = (7, 10), gridspec_kw = {'width_ratios': widthRatios})
     fig.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99, wspace = 0.0)
     ax[0].set_yticks(range(numRecords))
     ax[0].set_yticklabels(ylabels)
     ax[0].set_ylim(0, numRecords)
     ax[0].invert_yaxis()
     chrCount = 0
-    xtickPositions = [[0, int(1e8), int(2e8), int(3e8)], [0, int(1e8), int(2e8), int(3e8), int(4e8)], [0, int(1e8), int(2e8), int(3e8), int(4e8)]]
-    xtickLabels = [['', '100M', '200M', '300M'], ['', '100M', '200M', '300M', '400M'], ['', '100M', '200M', '300M', '400M']]
-    for chromID in lengths:
+    xtickPositions = [list(range(0, CHR_LENGTHS[chr], int(1e8))) for chr in CHR_LENGTHS]
+    xtickLabels = [[str(n//int(1e6))+'M' for n in range(0, CHR_LENGTHS[chr], int(1e8))] for chr in CHR_LENGTHS]
+    for chromID in CHR_NAMES:
         for cluster in yvalues:
             ax[chrCount].scatter(xvalues[cluster][chromID], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
         ax[chrCount].tick_params(labelsize = 3)
         if chrCount > 0:
             ax[chrCount].tick_params(left=False)
-        #pyplot.axvline(x = lengths['NC_035107.1'], linewidth=0.5, color='black')
-        #pyplot.axvline(x = lengths['NC_035107.1'] + lengths['NC_035108.1'], linewidth=0.5, color='black')
-        #pyplot.xticks(range(int(1e8), sum(lengths.values()), int(1e8)), [str(x)+'M' for x in range(100, lengths['NC_035107.1'] // int(1e6), 100)])
         ax[chrCount].set_xticks(xtickPositions[chrCount])
         ax[chrCount].set_xticklabels(xtickLabels[chrCount])
-        ax[chrCount].set_xlim(0, lengths[chromID])
+        ax[chrCount].set_xlim(0, CHR_LENGTHS[chromID])
         ax[chrCount].set_xlabel('Chromosome ' + str(chrCount + 1), fontsize=4)
         chrCount += 1
 
-#     fig = pyplot.figure(figsize=(7, 10))
-#     xoffset = 0
-#     for chromID in lengths:
-#         for cluster in yvalues:
-#             pyplot.scatter([x + xoffset for x in xvalues[cluster][chromID]], yvalues[cluster][chromID], color=colors[cluster][chromID], s = 1)
-#         xoffset += lengths[chromID]
-#             
-#     pyplot.tick_params(labelsize = 3)
-#     pyplot.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99)
-#     pyplot.yticks(range(len(aln) - 1), ylabels)
-#     pyplot.gca().invert_yaxis()
-#     pyplot.axvline(x = lengths['NC_035107.1'], linewidth=0.5, color='black')
-#     pyplot.axvline(x = lengths['NC_035107.1'] + lengths['NC_035108.1'], linewidth=0.5, color='black')
-#     #pyplot.xticks(range(int(1e8), sum(lengths.values()), int(1e8)), [str(x)+'M' for x in range(100, lengths['NC_035107.1'] // int(1e6), 100)])
-#     xtickPositions = [0, int(1e8), int(2e8), int(3e8), lengths['NC_035107.1']+int(1e8), lengths['NC_035107.1']+int(2e8), lengths['NC_035107.1']+int(3e8), lengths['NC_035107.1']+int(4e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(1e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(2e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(3e8), lengths['NC_035107.1']+lengths['NC_035108.1']+int(4e8)]
-#     xtickLabels = ['0', '100M', '200M', '300M', '100M', '200M', '300M', '400M', '100M', '200M', '300M', '400M']
-#     pyplot.xticks(xtickPositions, xtickLabels)
-#     pyplot.xlim(0, sum(lengths.values()))
-#    fig.suptitle('EVE insertion positions for ' + seqid, fontsize = 6, fontweight = 'bold', y = 0.98)
-    
-    if not Path(VIRUSES_DIR).exists():
-        os.system('mkdir ' + VIRUSES_DIR)
-    if not Path(SEQUENCES_DIR).exists():
-        os.system('mkdir ' + SEQUENCES_DIR)
-    fams = readFamFile()
-    familyDir = SEQUENCES_DIR + fams[seqid]
-    if not Path(familyDir).exists():
-        os.system('mkdir ' + familyDir)
-
-    saveFileName = familyDir + '/insertpositions_' + seqid
+    if not (Path(clusteredFileName).parent / seqid).exists():
+        os.system('mkdir ' + str(Path(clusteredFileName).parent / seqid))
+    saveFileName = str(Path(clusteredFileName).parent / seqid / (seqid + '_insertpositions'))
     if len(seqids) > 1:
         saveFileName += '_plus'
     pp = PdfPages(saveFileName + '.pdf')
@@ -511,8 +414,8 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
     nextGroupLabel = {}
     groups = {}
     clusterPidents = {}
-    for chromID in lengths:
-        tsvPositionFile = open(saveFileName + '_chr' + str(chromNumber[chromID]) + '.tsv', 'w')
+    for chromID in CHR_NAMES:
+        tsvPositionFile = open(saveFileName + '_' + CHR_NAMES[chromID] + '.tsv', 'w')
         tsvPositionFile.write('Cluster\tStart\tEnd\tRepeats\tIntron\tExon\t5\' Repeats\t5\' Intron\t5\' Exon\t3\' Repeats\t3\' Intron\t3\' Exon\tGroup\t% Identity\t' + '\t'.join(POPULATIONS.keys()) + '\tSpecimens\n')
         for cluster in positions:
             if cluster not in groupLabels:
@@ -528,7 +431,6 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
                         groupLabels[cluster][groupNames] = nextGroupLabel[cluster]
                         groups[cluster][nextGroupLabel[cluster]] = [groupNames, []]
                         nextGroupLabel[cluster] += 1
-#                    groups[cluster][groupLabels[cluster][groupNames]][1].append((chromNumber[chromID], position, positions[cluster][chromID][position]))
                     
                     featDict = {'left': {'repeat_region': [], 'intron': [], 'exon': []}, 'right': {'repeat_region': [], 'intron': [], 'exon': []}, 'inregion': {'repeat_region': [], 'intron': [], 'exon': []}}
                     for featLeft, featRight, featIn in features[cluster][chromID][position]:
@@ -590,7 +492,7 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
                         inregionRepeats = featStrings['inregion']['repeat_region']
                     else:
                         inregionRepeats = ''
-                    groups[cluster][groupLabels[cluster][groupNames]][1].append((chromNumber[chromID], position, (upstreamRepeat, downstreamRepeat, inregionRepeats, featStrings['inregion']['intron']), positions[cluster][chromID][position]))
+                    groups[cluster][groupLabels[cluster][groupNames]][1].append((CHR_NAMES[chromID], position, (upstreamRepeat, downstreamRepeat, inregionRepeats, featStrings['inregion']['intron']), positions[cluster][chromID][position]))
                     
                     if isinstance(position, tuple):
                         start = str(position[0])
@@ -618,23 +520,18 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
         tsvPositionFile.close()
         
     seqs = SeqIO.index(unalignedFastaName, 'fasta')
+    seqsFlanks = SeqIO.index(withFlanksFastaName, 'fasta')
     textFile = open(saveFileName + '.txt', 'w')
-    
-#     for cluster in clusterSeqs:
-#         clusterRecords = []
-#         totalLength = 0
-#         for desc in clusterSeqs[cluster]:
-#             clusterRecords.append(seqs[desc])
-#             totalLength += len(seqs[desc].seq)
-#         SeqIO.write(clusterRecords, unalignedFastaName.split('.')[0] + '_' + cluster + '.fasta', 'fasta')
-    
+        
     textFile.write('Cluster statistics\n\n')
     for cluster in clusterCounts:
         clusterRecords = []
+        clusterRecordsFlanks = []
         eveLengthFreq = {}
         for desc in clusterSeqs[cluster]:
             try:
                 clusterRecords.append(seqs[desc])
+                clusterRecordsFlanks.append(seqsFlanks[desc + '_with_flanks'])
                 eveLength = len(seqs[desc].seq)
                 if eveLength not in eveLengthFreq:
                     eveLengthFreq[eveLength] = 0
@@ -643,12 +540,14 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
                 for desc2 in seqs:
                     if desc.split('_|_')[:2] == desc2.split('_|_')[:2]:
                         clusterRecords.append(seqs[desc2])
+                        clusterRecordsFlanks.append(seqsFlanks[desc2 + '_with_flanks'])
                         eveLength = len(seqs[desc2].seq)
                         if eveLength not in eveLengthFreq:
                             eveLengthFreq[eveLength] = 0
                         eveLengthFreq[eveLength] += 1
                         break
-        SeqIO.write(clusterRecords, unalignedFastaName.split('.')[0] + '_' + cluster + '.fasta', 'fasta')
+        SeqIO.write(clusterRecords, str(Path(clusteredFileName).parent / seqid / (seqid + '_' + cluster + '.fasta')), 'fasta')
+        SeqIO.write(clusterRecordsFlanks, str(Path(clusteredFileName).parent / seqid / (seqid + '_' + cluster + '_with_flanks.fasta')), 'fasta')
         
         textFile.write('  Cluster ' + cluster + '\n')
         textFile.write('    EVE length distribution:\n')
@@ -717,7 +616,7 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, maxDist, unalignedFast
 #         textFile.write('  Cluster ' + str(cluster) + ': {:5.2f}%\n'.format(totalClusterPidents[cluster] / totalClusterSize[cluster]))
                 
 def usage():
-    print('Usage: ' + sys.argv[0] + ' [--omit_first] [--accs=XXX[,YYY,...]] [--max_dist=N] clustered_filename.fasta unaligned_sequences.fasta')
+    print('Usage: ' + sys.argv[0] + ' [--omit_first] [--find_features] [--accs=XXX[,YYY,...]] [--max_dist=N] /path/to/clustered_filename.fasta')
 
 def main():
     if len(sys.argv) < 2:
@@ -726,8 +625,9 @@ def main():
         
     accs = None
     omitFirst = False
-    maxDist = MAX_FLANK_DISTANCE
-    for arg in sys.argv[1:-2]:
+    findFeatures = False
+    maxDist = config['MAX_FLANK_DISTANCE']
+    for arg in sys.argv[1:-1]:
         if arg.startswith('--accs'):
             accs = arg.split('=')[1]
             accs = accs.split(',')
@@ -736,6 +636,8 @@ def main():
                 return
         elif arg == '--omit_first':
             omitFirst = True
+        elif arg == '--find_features':
+            findFeatures = True
         elif arg.startswith('--max_dist'):
             maxDist = arg.split('=')[1]
             try:
@@ -747,15 +649,13 @@ def main():
             usage()
             return
     
-    if (sys.argv[-2][0] == '-') or (sys.argv[-1][0] == '-'):
+    if sys.argv[-1][0] == '-':
         usage()
         return
        
-    if FIND_FEATURES: 
+    if findFeatures: 
         makeIntervalTrees()
-    drawInsertSites(sys.argv[-2], accs, omitFirst, maxDist, sys.argv[-1])
+    drawInsertSites(sys.argv[-1], accs, omitFirst, findFeatures, maxDist)
     
 if __name__ == '__main__':
     main()
-    
-#python3 insertsites.py '/Volumes/Data2/sequences_NC_001564.2_per_contig_aligned_clustered_k8_relabeled.fasta' 'NC_001564.2'

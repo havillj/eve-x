@@ -27,6 +27,7 @@ BASE_FEATURES_GFF3_FILENAME = GFF3_DIR + 'Aedes-aegypti-LVP_AGWG_BASEFEATURES_Aa
 REPEAT_FEATURES_GFF3_FILENAME = GFF3_DIR + 'Aedes-aegypti-LVP_AGWG_REPEATFEATURES_AaegL5.gff3'
 CHR_NAMES = {'NC_035107.1': 'Chr1', 'NC_035108.1': 'Chr2', 'NC_035109.1': 'Chr3'}   # for diagrams
 CHR_NUMBERS = {'1': 'NC_035107.1', '2': 'NC_035108.1', '3': 'NC_035109.1', 'MT': 'NC_035159.1'} # for gff3 files
+CHR_LENGTHS = {'NC_035107.1': 310827022, 'NC_035108.1': 474425716, 'NC_035109.1': 409777670}
 
 """ 
 A dictionary used in the getSpecimenLabel function to determine the 
@@ -83,7 +84,7 @@ Configurable variables by function
        
     MAX_FLANK_DISTANCE (positive integer)
        This is the maximum distance between a pair of host hits in a contig for
-       them to be considered a matching pair.
+       them to be considered a matching pair.  Also used in getInsertSites.
 
     ALLOWED_OVERLAP (non-negative integer)
        Given a pair of host hits that are within MAX_FLANK_DISTANCE bp of 
