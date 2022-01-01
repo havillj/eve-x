@@ -1,7 +1,5 @@
 # EVE
 
-## Installation
-
 ## Dependencies
 
 ### Python modules
@@ -147,12 +145,23 @@ There are several ways to customize the execution of EVE.  These options are des
 
 ## Usage
 
+To run EVE on the specimen files in the directory `SPECIMENS_DIR`, simply execute
 ```
-eve.py
+python3 eve.py
 ```
 
+This will generate many files following the directory structure in the [next section](#directory-structure).
+
+If you wish, you can manually adjust any of the clustered aligned sequence files and then run
+
 ```
-insertsites.py
+python3 insertsites.py /path/to/clustered_sequences.fasta
+```
+
+to locate putative insertion sites, generate FASTA files for each cluster, and get the geographical distribution of the clusters.  If you wish to also identify genomic features near the insertion sites, specify `--find_features`, as below:
+
+```
+python3 insertsites.py --find_features /path/to/clustered_sequences.fasta
 ```
 
 ## Directory structure
@@ -227,9 +236,26 @@ In the following directory tree, `N` is used to represent the last in a series, 
             │   └── clustered
             │       ├── <VIRUS_FAMILY 1 VIRUS 1>_per_contig_aligned_clustered_k?.fasta
             │       ├── <VIRUS_FAMILY 1 VIRUS 1>_per_contig_aligned_clustered_k?.txt
+            │       ├── <VIRUS_FAMILY 1 VIRUS 1>
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_C1.fasta
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_C1_with_flanks.fasta
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_C2.fasta
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_C2_with_flanks.fasta
+            │       │   :
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_CN.fasta
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_CN_with_flanks.fasta
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_insertpositions_Chr1.tsv
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_insertpositions_Chr2.tsv
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_insertpositions_Chr3.tsv
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_insertpositions.pdf
+            │       │   └── <VIRUS_FAMILY 1 VIRUS 1>_insertpositions.txt
             │       :
             │       ├── <VIRUS_FAMILY 1 VIRUS N>_per_contig_aligned_clustered_k?.fasta
-            │       └── <VIRUS_FAMILY 1 VIRUS N>_per_contig_aligned_clustered_k?.txt
+            │       ├── <VIRUS_FAMILY 1 VIRUS N>_per_contig_aligned_clustered_k?.txt
+            │       └── <VIRUS_FAMILY 1 VIRUS N>
+            │           ├── 
+            │           :   (as above)
+            │           └── 
             :
             └── <VIRUS_FAMILY N>
                 ├── 
