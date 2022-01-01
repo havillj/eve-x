@@ -231,7 +231,7 @@ def getInsertSites(findFeatures, desiredSeqIDs = None, bestHitsOnly = True):
 
     return insertSites, specimen2Label
        
-def drawInsertSites(clusteredFileName, seqids, omitFirst, findFeatures, maxDist, bestHitsOnly = True):
+def drawInsertSites(clusteredFileName, findFeatures, bestHitsOnly = True):
     if not Path(clusteredFileName).exists():
         writelog('File does not exist: ' + clusteredFileName, True)
         return
@@ -239,23 +239,20 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, findFeatures, maxDist,
     unalignedFastaName = str(Path(clusteredFileName).resolve().parent.parent / (Path(clusteredFileName).name.split('_aligned_clustered')[0] + '_unaligned.fasta'))
     withFlanksFastaName = str(Path(clusteredFileName).resolve().parent.parent / (Path(clusteredFileName).name.split('_aligned_clustered')[0] + '_with_flanks.fasta'))
         
-    paramOmitFirst = omitFirst
-    if seqids is None:
-        seqids = set()
-        for record in SeqIO.parse(clusteredFileName, 'fasta'):
-            if omitFirst:
-                omitFirst = False
-                continue
-            parts = record.description.split('_|_')
-            if len(parts) < 4:  # no cluster ids
-                seqid = parts[2].split('.')[0] 
-                seqid += parts[2].split(seqid)[1][:2]
-            else:
-                seqid = parts[3].split('.')[0]
-                seqid += parts[3].split(seqid)[1][:2]
-            seqids.add(seqid)
-        
-        omitFirst = paramOmitFirst
+    foundFirst = False
+    seqids = set()
+    for record in SeqIO.parse(clusteredFileName, 'fasta'):
+        if not foundFirst:
+            foundFirst = True
+            continue
+        parts = record.description.split('_|_')
+        if len(parts) < 4:  # no cluster ids
+            seqid = parts[2].split('.')[0] 
+            seqid += parts[2].split(seqid)[1][:2]
+        else:
+            seqid = parts[3].split('.')[0]
+            seqid += parts[3].split(seqid)[1][:2]
+        seqids.add(seqid)
     
     insertSites, specimen2Label = getInsertSites(findFeatures, seqids, bestHitsOnly)
     
@@ -273,9 +270,10 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, findFeatures, maxDist,
     clusterSeqs = {}
         
     numRecords = 0
+    foundFirst = False
     for record in SeqIO.parse(clusteredFileName, 'fasta'):
-        if omitFirst:
-            omitFirst = False
+        if not foundFirst:
+            foundFirst = True
             continue
         numRecords += 1
         desc = record.description
@@ -596,7 +594,7 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, findFeatures, maxDist,
 #                if isinstance(pos[1], tuple):
                 found1 = False
                 for hit in hits:
-                    if (hit[2] in ['match', 'inversion', 'referenceoverlap']) and (abs(pos[0] - pos[1]) <= maxDist):
+                    if (hit[2] in ['match', 'inversion', 'referenceoverlap']) and (abs(pos[0] - pos[1]) <= config['MAX_FLANK_DISTANCE']):
                         if not found2:
                             textFile.write('    Group ' + str(groupLabel) + ' (size ' + str(len(groups[cluster][groupLabel][0])) + ')\n')
                             found2 = True
@@ -616,35 +614,17 @@ def drawInsertSites(clusteredFileName, seqids, omitFirst, findFeatures, maxDist,
 #         textFile.write('  Cluster ' + str(cluster) + ': {:5.2f}%\n'.format(totalClusterPidents[cluster] / totalClusterSize[cluster]))
                 
 def usage():
-    print('Usage: ' + sys.argv[0] + ' [--omit_first] [--find_features] [--accs=XXX[,YYY,...]] [--max_dist=N] /path/to/clustered_filename.fasta')
+    print('Usage: ' + sys.argv[0] + ' [--find_features] /path/to/clustered_filename.fasta')
 
 def main():
     if len(sys.argv) < 2:
         usage()
         return
         
-    accs = None
-    omitFirst = False
     findFeatures = False
-    maxDist = config['MAX_FLANK_DISTANCE']
     for arg in sys.argv[1:-1]:
-        if arg.startswith('--accs'):
-            accs = arg.split('=')[1]
-            accs = accs.split(',')
-            if accs == ['']:
-                usage()
-                return
-        elif arg == '--omit_first':
-            omitFirst = True
-        elif arg == '--find_features':
+        if arg == '--find_features':
             findFeatures = True
-        elif arg.startswith('--max_dist'):
-            maxDist = arg.split('=')[1]
-            try:
-                maxDist = int(maxDist)
-            except:
-                usage()
-                return
         else:
             usage()
             return
@@ -655,7 +635,7 @@ def main():
        
     if findFeatures: 
         makeIntervalTrees()
-    drawInsertSites(sys.argv[-1], accs, omitFirst, findFeatures, maxDist)
+    drawInsertSites(sys.argv[-1], findFeatures)
     
 if __name__ == '__main__':
     main()
