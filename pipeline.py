@@ -15,24 +15,23 @@ def getUnmappedReads(filenameBAM):
        a new BAM file.
     
        Parameter:
-           filenameBAM: absolute path of input BAM file
+           filenameBAM: absolute path of input BAM file as a Path object
            
-       Return value: absolute path of the output BAM file
+       Return value: absolute path of the output BAM file as a Path object
     """
     
-    writelog('\nAnalyzing ' + filenameBAM, True)
+    shortName = filenameBAM.name.split('.')[0]
+    specimenResultsPath = Path(SPECIMEN_RESULTS_DIR) / shortName
+    if not specimenResultsPath.exists():
+        os.system('mkdir ' + str(specimenResultsPath))
     
-    try:
-        index = filenameBAM.index('.sorted')
-    except:
-        index = filenameBAM.index('.bam')
-    newFilenameBAM = filenameBAM[:index] + '_unmapped_with_mates.bam'  # absolute path
+    newFilenameBAM = specimenResultsPath / (shortName + '_unmapped_with_mates.bam')  # absolute path
 
-    writelog('Getting unmapped reads...', True)
+    writelog('Getting unmapped reads ...', True)
 
-    if not Path(newFilenameBAM).exists():
-        bamfile = pysam.AlignmentFile(filenameBAM, 'rb', threads=8)
-        newBAM = pysam.AlignmentFile(newFilenameBAM, 'wb', template=bamfile, threads=8)
+    if not newFilenameBAM.exists():
+        bamfile = pysam.AlignmentFile(str(filenameBAM), 'rb', threads=8)
+        newBAM = pysam.AlignmentFile(str(newFilenameBAM), 'wb', template=bamfile, threads=8)
 
         count = 0
         count_total = 0
@@ -46,39 +45,41 @@ def getUnmappedReads(filenameBAM):
         bamfile.close()
         newBAM.close()
 
-        writelog('   Total reads =', count_total)
-        writelog('   Unmapped reads =', count, '({:.2f}%)'.format(100*count/count_total))
+        writelog('   Total reads = ' + str(count_total), True)
+        writelog('   Unmapped reads = ' + str(count) + ' ({:.2f}%)'.format(100*count/count_total), True)
     else:
-        writelog('   Skipping - ' + newFilenameBAM + ' exists.', True)
+        writelog('   Skipping - ' + str(newFilenameBAM) + ' exists.', True)
         
     return newFilenameBAM  # absolute path
     
 ###############################################################################
 
-def writeReadsFASTQ(viralFilenameBAM):
+def writeReadsFASTQ(filenameBAM):
     """Write paired-end reads from BAM file to 3 FASTQ files.
     
        Parameters:
-           viralFilenameBAM: absolute path of BAM file containing viral reads
+           viralFilenameBAM: absolute path of BAM file containing potential 
+                             viral reads as a Path object
            
-       Return value: None
+       Return value: absolute path of SPAdes working directory as a Path object
     """
     
-    writelog('Writing paired-end reads to FASTQ files...', True)
+    writelog('Writing paired-end reads to FASTQ files ...', True)
     
-    spadesPath = Path(viralFilenameBAM).parent / 'spades'
+    spadesPath = filenameBAM.parent / SPADES_DIR
     
     if not spadesPath.exists():
         os.system('mkdir ' + str(spadesPath))
         
     if (spadesPath / 'viral1.fastq').exists():
         writelog('   Skipping - FASTQ files exist.', True)
-        return
-    
-    os.system('samtools fastq -1 ' + str(spadesPath / 'viral1.fastq') 
-              + ' -2 ' + str(spadesPath / 'viral2.fastq') 
-              + ' -s ' + str(spadesPath / 'viral_single.fastq') + ' ' 
-              + viralFilenameBAM)
+    else:
+        os.system(SAMTOOLS_EXEC + ' fastq -1 ' + str(spadesPath / 'viral1.fastq') 
+                  + ' -2 ' + str(spadesPath / 'viral2.fastq') 
+                  + ' -s ' + str(spadesPath / 'viral_single.fastq') + ' ' 
+                  + str(filenameBAM))
+              
+    return spadesPath
     
 ###############################################################################
 
@@ -91,9 +92,9 @@ def assembleReads(dirName):
        Return value: Boolean indicating whether assembly was successful
     """
 
-    writelog('Assembling reads with SPAdes...', True)
+    writelog('Assembling reads with SPAdes ...', True)
     
-    spadesPath = Path(dirName) / 'spades'
+    spadesPath = Path(dirName)
     if (spadesPath / 'scaffolds.fasta').exists():
         writelog('   Skipping - scaffolds.fasta exists.', True)
         return True
@@ -128,11 +129,11 @@ def blastScaffolds(dirName, force = False):
        Return value: None
     """
     
-    spadesPath = Path(dirName) / 'spades'
+    spadesPath = Path(dirName) / SPADES_DIR
     scaffoldsName = str(spadesPath / 'scaffolds.fasta')
     outVirusCSV = spadesPath / 'blast_scaffolds.csv'
     
-    writelog('BLASTing scaffolds against viral database...', True)
+    writelog('BLASTing scaffolds against viral database ...', True)
     
     if not force and outVirusCSV.exists():
         writelog('   Skipping - ' + str(outVirusCSV) + ' exists.', True)
@@ -263,13 +264,13 @@ def getHits(dirName):
     
     writelog('Combining BLAST results to locate putative EVEs...', True)
     
-    spadesPath = Path(dirName) / 'spades'                # specimen assembly dir
+    spadesPath = Path(dirName) / SPADES_DIR              # specimen assembly dir
     
     resultsPath = Path(dirName) / SPECIMEN_RESULTS_DIR   # specimen results dir
     if not resultsPath.exists():
         os.system('mkdir ' + str(resultsPath))
         
-    scaffoldsPath = resultsPath / 'scaffolds'
+    scaffoldsPath = resultsPath / SCAFFOLDS_DIR
     if not scaffoldsPath.exists():
         os.system('mkdir ' + str(scaffoldsPath))
         
@@ -278,7 +279,7 @@ def getHits(dirName):
     scaffoldsFilename = str(scaffoldsPath / 'scaffolds.fasta')
     csvVirusFilename = str(scaffoldsPath / 'blast_scaffolds.csv')
     
-    xmlPath = resultsPath / 'xml'
+    xmlPath = resultsPath / XML_DIR
     if not xmlPath.exists():
         os.system('mkdir ' + str(xmlPath))
     xmlFilename = str(xmlPath / (Path(dirName).name + '_hits.xml'))
@@ -545,7 +546,7 @@ def drawContigs(fileName):
        Return value: None
     """
     
-    diagramsPath = Path(fileName).parent.parent / 'diagrams'
+    diagramsPath = Path(fileName).parent.parent / DIAGRAMS_DIR
     
     if not diagramsPath.exists():
         os.mkdir(str(diagramsPath))
@@ -936,11 +937,11 @@ def consolidateAll():
     pIdents = {}
     
     xmlFiles = []
-    specimensPath = Path(SPECIMENS_DIR)
+    specimensPath = Path(SPECIMENS_RESULTS_DIR)
     for specimenDir in specimensPath.iterdir():
         if specimenDir.name[0] != '.':
-            for file in (specimenDir / (SPECIMEN_RESULTS_DIR + '/xml')).iterdir():
-                if (file.name[0] != '.') and (('_hits_features.xml' in file.name) or (('_hits.xml' in file.name) and not Path(str(file)[:-4] + '_features.xml').exists())):
+            for file in (specimenDir / XML_DIR).iterdir():
+                if (file.name[0] != '.') and ('_hits.xml' in file.name):
                     xmlFiles.append(file.resolve())
     xmlFiles.sort()
     
@@ -955,13 +956,13 @@ def consolidateAll():
         label2Specimen[(region, num)] = specimen
         writelog('  Processing ' + str(specimenCount) + '/' + str(len(xmlFiles)) + ': ' + specimen, True)
         specimenCount += 1
-        seqPath = file.parent.parent / 'sequences'
+        seqPath = file.parent.parent / SEQUENCES_DIR
         if not seqPath.exists():
             os.system('mkdir ' + str(seqPath))
         virus_fasta = open(str(seqPath / (specimen + '_hits_aligned.fasta')), 'w')
         virus_fasta_percontig = open(str(seqPath / (specimen + '_hits_unaligned.fasta')), 'w')
 
-        contigs = SeqIO.index(str(file.parent.parent.parent / (SPECIMEN_RESULTS_DIR + '/scaffolds/scaffolds.fasta')), 'fasta')
+        contigs = SeqIO.index(str(file.parent.parent / SCAFFOLDS_DIR / 'scaffolds.fasta'), 'fasta')
 
         # Parse XML tree.
         
@@ -1116,10 +1117,10 @@ def consolidateAll():
         virus_fasta.close()
         virus_fasta_percontig.close()
         
-    if not Path(VIRUSES_DIR).exists():
-        os.system('mkdir ' + VIRUSES_DIR)
-    if not Path(SEQUENCES_DIR).exists():
-        os.system('mkdir ' + SEQUENCES_DIR)
+    if not Path(VIRUS_RESULTS_DIR).exists():
+        os.system('mkdir ' + VIRUS_RESULTS_DIR)
+    if not (Path(VIRUS_RESULTS_DIR) / SEQUENCES_DIR).exists():
+        os.system('mkdir ' + str((Path(VIRUS_RESULTS_DIR) / SEQUENCES_DIR)))
         
     fams = readFamFile()
     positions = {}
@@ -1189,9 +1190,9 @@ def consolidateAll():
                 for contigName in refIndices[specimen]:
                     viralSeqs[(seqid, stitle)][specimen][contigName] += '{0:-<{1}}'.format(refIndices[specimen][contigName].get(refIndex, ''), maxLength)
 
-        FAMILY_DIR = SEQUENCES_DIR + fams[seqid]
+        FAMILY_DIR = Path(VIRUS_RESULTS_DIR) / SEQUENCES_DIR / fams[seqid]
         if not Path(FAMILY_DIR).exists():
-            os.system('mkdir ' + FAMILY_DIR)
+            os.system('mkdir ' + str(FAMILY_DIR))
         
         seqOutFileName = str(Path(FAMILY_DIR) / (seqid + '_per_specimen_aligned.fasta'))
         seqOutPerContigFileName = str(Path(FAMILY_DIR) / (seqid + '_per_contig_aligned.fasta'))
@@ -1282,9 +1283,9 @@ def consolidateAll():
     # -outfmt "10 qseqid qstart qend qseq sstart send sseq evalue bitscore sseqid stitle pident"
         
     for family in set(allFamilies):
-        FAMILY_DIR = SEQUENCES_DIR + family
+        FAMILY_DIR = Path(VIRUS_RESULTS_DIR) / SEQUENCES_DIR / family
         if not Path(FAMILY_DIR).exists():
-            os.system('mkdir ' + FAMILY_DIR)
+            os.system('mkdir ' + str(FAMILY_DIR))
             
         # get seqids in family
         famACCs = []
@@ -1400,14 +1401,14 @@ class MyCustomTranslator(BiopythonTranslator):
             return [feature for feature in filtered_features1 if 'product' not in feature.qualifiers or feature.qualifiers['product'][0] != 'polyprotein']
 
 def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showPlot, small):    
-
-    if not Path(VIRUSES_DIR).exists():
-        os.system('mkdir ' + VIRUSES_DIR)
-    if not Path(DIAGRAMS_DIR).exists():
-        os.system('mkdir ' + DIAGRAMS_DIR)
-    FAMILY_DIR = DIAGRAMS_DIR + family
+    
+    if not Path(VIRUS_RESULTS_DIR).exists():
+        os.system('mkdir ' + VIRUS_RESULTS_DIR)
+    if not (Path(VIRUS_RESULTS_DIR) / DIAGRAMS_DIR).exists():
+        os.system('mkdir ' + str((Path(VIRUS_RESULTS_DIR) / DIAGRAMS_DIR)))
+    FAMILY_DIR = Path(VIRUS_RESULTS_DIR) / DIAGRAMS_DIR / family
     if not Path(FAMILY_DIR).exists():
-        os.system('mkdir ' + FAMILY_DIR)
+        os.system('mkdir ' + str(FAMILY_DIR))
     
     if small:
         width = 3
@@ -1577,10 +1578,10 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showPlot,
         pyplot.close(fig)
 
 def getHitsForDiagram():
-    writelog('  Reading hits for diagrams...', True)
-    dir = Path(SPECIMENS_DIR)
+    writelog('  Reading hits for diagrams ...', True)
+    dir = Path(SPECIMENS_RESULTS_DIR)
     subdirs = [d for d in dir.iterdir()]
-    files = [d / (SPECIMEN_RESULTS_DIR + '/xml/' + d.name + '_hits.xml') for d in subdirs ]
+    files = [d / XML_DIR / (d.name + '_hits.xml') for d in subdirs]
     files.sort()
 
     allVirusHits = {}
@@ -1662,7 +1663,7 @@ def drawFamily(families, famACCs, separatePops, showPlot, small):
         famACCs = None
     
 def drawAll(separatePops = False):
-    writelog('Creating diagrams...', True)
+    writelog('Creating diagrams ...', True)
     allVirusHits, allSpecimens = getHitsForDiagram()
     
     fams = readFamFile()
@@ -1678,14 +1679,15 @@ def drawAll(separatePops = False):
 
 ###############################################################################
 
-def doIt(dirName, filenameBAM):
-    
-    filenameBAM = str(Path(dirName) / filenameBAM)
+def doIt(filenameBAM):
+    if not Path(SPECIMEN_RESULTS_DIR).exists():
+        os.system('mkdir ' + str(SPECIMEN_RESULTS_DIR))
+        
     newFilenameBAM = getUnmappedReads(filenameBAM)
-    writeReadsFASTQ(newFilenameBAM)
-
-    success = assembleReads(dirName)    # 1. Assemble
+    spadesPath = writeReadsFASTQ(newFilenameBAM)
+    success = assembleReads(spadesPath) # 1. Assemble
     if success:
+        dirName = spadesPath.parent
         blastScaffolds(dirName)         # 2. Blast scaffolds
         xmlFilename = getHits(dirName)  # 3. Get hits
         if xmlFilename is not None:
@@ -1698,18 +1700,14 @@ def doIt(dirName, filenameBAM):
     writelog('*** ' + str(Path(dirName).name) + ' done. ***', True)
 
 def doAll():
-#    dirList = [dir for dir in Path(SPECIMENS_DIR).iterdir() if dir.is_dir()]
-    dirList = [Path('/Volumes/Data2/specimens/La_Lope-Gabon-7.LIN210A1643')]
+#    fileList = sorted(Path(SPECIMENS_DIR).rglob('*.bam'))
+    fileList = [Path('/Volumes/Data2/specimen_copies/Angola/Debug010_aegypti_Cuanda_Angola_01.LIN210A1719.sorted.deduped.merged.bam')]
 
     count = 0
-    dirList.sort()
-    for dir in dirList:
-        for file in dir.iterdir():
-            if not file.is_dir() and (file.name[-26:] == '.sorted.deduped.merged.bam'):
-                count += 1
-                writelog('\n' + str(count) + '/' + str(len(dirList)) + ': ' + dir.name, True)
-                doIt(str(dir.resolve()), file.name)
-                break
+    for file in fileList:
+        count += 1
+        writelog('\n' + str(count) + '/' + str(len(fileList)) + ': ' + file.name, True)
+        doIt(file.resolve())
                     
 # def doAllParallel2():
 #     dirList = [dir for dir in Path(SPECIMENS_DIR).iterdir() if dir.is_dir() and ('combined' not in dir.name)]

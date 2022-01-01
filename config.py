@@ -8,9 +8,12 @@ from pathlib import Path
 """
 
 SPADES_EXEC = '/Volumes/Data/bin/SPAdes-3.14.1-Linux/bin/spades.py'
-BLAST_EXEC = '/usr/local/bin/blastn'
+BLAST_EXEC = 'blastn'
+SAMTOOLS_EXEC = 'samtools'
 
-ROOT_DIR = '/Volumes/Data2/'
+ROOT_DIR = '/Volumes/Data2/'             # root directory where all data files related to EVE will be located
+SPECIMENS_DIR = ROOT_DIR + 'specimens/'  # path for original specimen BAM files
+RESULTS_DIR = ROOT_DIR + 'results3/'     # path for results
 
 """
    Specimen parameters
@@ -204,13 +207,21 @@ config = {'MIN_PIDENT': 80,
    that you know what you are doing.
 """
 
-SPECIMENS_DIR = ROOT_DIR + 'specimens/' # path for specimens directories
-SPECIMEN_RESULTS_DIR = 'results'        # results subdirectory for each specimen
+VIRUS_RESULTS_DIR = RESULTS_DIR + 'viruses/'         # path for per-virus results
+SPECIMEN_RESULTS_DIR = RESULTS_DIR + 'specimens/'    # path for per-specimen results
 
-RESULTS_DIR = ROOT_DIR + 'results/'     # path for consolidated results
-VIRUSES_DIR = RESULTS_DIR + 'viruses/'  # path for per-virus results
-SEQUENCES_DIR = VIRUSES_DIR + 'sequences/'  # path for per-virus FASTA files
-DIAGRAMS_DIR = VIRUSES_DIR + 'diagrams/'    # path for per-virus diagrams
+SEQUENCES_DIR = 'sequences/'  # FASTA file subdirectory (viruses + specimens)
+DIAGRAMS_DIR = 'diagrams/'    # diagram subdirectory (viruses + specimens)
+SCAFFOLDS_DIR = 'scaffolds/'  # assembled scaffolds subdirectory (specimens)
+XML_DIR = 'xml/'              # XML results subdirectory (specimens)
+SPADES_DIR = 'spades/'        # SPAdes work subdirectory (specimens)
+
+
+# SPECIMEN_RESULTS_DIR = 'results'        # results subdirectory for each specimen
+# VIRUSES_DIR = RESULTS_DIR + 'viruses/'  # path for per-virus results
+# SEQUENCES_DIR = VIRUSES_DIR + 'sequences/'  # path for per-virus FASTA files
+# DIAGRAMS_DIR = VIRUSES_DIR + 'diagrams/'    # path for per-virus diagrams
+
 
 GB_DIR = ROOT_DIR + 'gb/'
 FASTA_DIR = ROOT_DIR + 'fasta/'

@@ -13,8 +13,9 @@ import matplotlib.pyplot as pyplot
 matplotlib.use('Agg')
 import math
 import dash_bootstrap_components as dbc
-from pathlib import Path
-from util import getContig
+from dash.exceptions import PreventUpdate
+#from pathlib import Path
+#from util import getContig
 
 
 specVirus = {('Philippines', 15) : ['Lassa mammarenavirus', 'Mercadeo virus', 'Merida virus', 'Wuhan Mosquito Virus 6', 'Zika virus', 'Culex ohlsrhavirus', 'Aedes anphevirus', 'Ohlsdorf ohlsrhavirus', 'Cell fusing agent virus', 'West Nile virus'] ,
@@ -272,26 +273,39 @@ regions.sort()
 
 app = dash.Dash()
 
-app.layout = html.Div(children=[
-    html.H1(children='EVEs In Aedes aegypti Mosquitoes',style={'textAlign': 'center'}),
+app.layout = html.Div(
 
-    html.Div(style={'textAlign': 'center'}, children=['Contig Diagrams for EVE in AAa genome',]),
+    children =[
+    html.H1(id = 'header', children='EVEs In Aedes aegypti Mosquitoes',style={'textAlign': 'center'}),
+
+    html.Div(style ={'textAlign': 'center'}, children=['Contig Diagrams for EVE in AAa genome',]),
 
     html.P("To enable more convenient appraisal of individual contigs, EVE produces diagrams of the viral hits in each contig (only the best hit). To see different contigs containing viral hits, select a specimen and virus.",
      style = {'textAlign': 'center'}),
+
     html.Br(),
 
-    html.Div ([dcc.Dropdown( id='countries-dropdown',placeholder = 'Select a region',options=[{'label': k, 'value': k} for k in all_regions.keys()])], style = {'width':'20%', 'display': 'inline-block'},),
+    html.Hr(),
 
-    html.Div([dcc.Dropdown(id='numbers-dropdown', placeholder = 'Select a num'),], style = {'width':'20%', 'display': 'inline-block'},),
+    html.P("Select a specimen:"),
 
-    html.Div([dcc.Dropdown(id='family-dropdown', options = [{'label': k, 'value': k} for k in vFam.keys()], placeholder = 'Select a family')], style = {'width': '30%', 'display': 'inline-block'}),
+    html.Div ([dcc.Dropdown( id ='countries-dropdown',placeholder = 'Select a region', options = [{'label': k, 'value': k} for k in all_regions.keys()])], style = {'width':'20%', 'display': 'inline-block'},),
 
-    html.Div([dcc.Dropdown(id='virus-dropdown', placeholder = 'Select a virus'),], style = {'width':'30%', 'display': 'inline-block'}),
+    html.Div([dcc.Dropdown(id ='numbers-dropdown', placeholder = 'Select a num')], style = {'width':'20%', 'display': 'inline-block'},),
 
-    html.Br(),html.Br(),
+    html.Br(),
 
-    dbc.Button('submit', id = 'submit', n_clicks = 0),
+    html.Button('submit', id ='submit-1', n_clicks = 0),
+
+    html.Br(), html.Br(),
+
+
+    html.Div(id = 'fam-vir', children = [html.P("Select a virus: "),
+                html.Div([dcc.Dropdown(id='family-dropdown', options = [{'label': k, 'value': k} for k in vFam.keys()], placeholder = 'Select a family')], style = {'width': '30%', 'display': 'inline-block'}),
+                html.Div([dcc.Dropdown(id='virus-dropdown', placeholder = 'Select a virus'),], style = {'width':'30%', 'display': 'inline-block'})],
+    style = {'display': 'none'}),
+
+    dbc.Button('submit', id = 'submit', n_clicks = 0, style = {'display':'none'}),
 
     html.P(id = 'result', style = {'display':'none'}),
 
@@ -312,9 +326,10 @@ app.layout = html.Div(children=[
     html.Div (id = 'right-div', children =[html.P(id = 'choose-right', style = {'font-size':14}), dcc.Input(id='right-num', type ='number', placeholder = 'Number of inv', min=0, value = 0)],
              style = {'display':'none', "margin-left": "20px"}),
 
-    html.Hr(),
+    html.Div (id = 'overlap-div', children =[html.P(id = 'choose-overlap', style = {'font-size':14}), dcc.Input(id='overlap-num', type ='number', placeholder = 'Number of overlaps', min=0, value = 0)],
+             style = {'display':'none', "margin-left": "20px"}),
 
-    html.Div([html.Img(id = 'contigDiagram')], style = {'textAlign': 'center'}),
+    html.Div(id = 'img-buttons', children = [html.Img(id = 'contigDiagram', style = {'textAlign': 'center'}),
 
     html.Br(),
 
@@ -325,7 +340,7 @@ app.layout = html.Div(children=[
 
     html.P(id="download-seq", style = {'display': 'none'}),
 
-    html.Button("Download Contig", id="btn_txt", style = {'display': 'none'}),
+    html.Button("Download Contig", id="btn_txt", style = {'display': 'none'}),]),
 
     dcc.Download(id='download-text'),
 
@@ -351,11 +366,31 @@ def func(n_clicks, seq, country, num):
 
 @app.callback(
     Output('btn_txt', 'style'),
+    Output('contig-num', 'value'),
+    Output('matches-num', 'value'),
+    Output('inv-num', 'value'),
+    Output('left-num', 'value'),
+    Output('right-num', 'value'),
+    Output('overlap-num', 'value'),
     Input('submit','n_clicks'),
     prevent_initial_call=True,
 )
 def hideDownload(n_clicks):
-    return {'display' : 'inline-block'}
+    return {'display' : 'inline-block'}, 1, 0, 0, 0, 0, 0
+
+###############################################################################
+
+@app.callback(
+    Output('submit', 'style'),
+    Output('family-dropdown', 'value'),
+    Output('virus-dropdown', 'value'),
+    Output('fam-vir', 'style'),
+    Input('submit-1','n_clicks'),
+    prevent_initial_call=True,
+)
+def hideFirstSubmit(n_clicks):
+    return {'display' : 'inline-block'}, 'none', 'none', {'display' : 'block'}
+
 
 ###############################################################################
 
@@ -408,6 +443,18 @@ def set_rightNum_caption(state, right):
 ###############################################################################
 
 @app.callback(
+    Output('choose-overlap', 'children'),
+    Output('overlap-div', 'style'),
+    Input('result', 'children'),
+    State('overlap-num', 'max'),
+    prevent_initial_call = True
+)
+def set_overlapNum_caption(state, overlap):
+    return f"Choose number of overlaps (max: {overlap})", {'display':'inline-block', "margin-left": "20px"}
+
+###############################################################################
+
+@app.callback(
     Output('choose-contig', 'children'),
     Output('contig-div', 'style'),
     Input('result', 'children'),
@@ -420,12 +467,27 @@ def set_contig_caption(state, contig_max):
 ###############################################################################
 
 @app.callback(
+    Output('img-buttons','style'),
+    Input('family-dropdown', 'value'),
+    Input('virus-dropdown', 'value'),
+    prevent_initial_call = True
+)
+def hideIMG(fam, vir):
+    if fam != 'none' and vir != 'none':
+        return {'display':'block'}
+    else:
+        return {'display':'none'}
+
+###############################################################################
+
+@app.callback(
     Output('family-dropdown', 'options'),
-    Input('numbers-dropdown', 'value'),
+    Input('submit-1', 'n_clicks'),
+    State('numbers-dropdown', 'value'),
     State('countries-dropdown', 'value'),
     prevent_initial_call = True
 )
-def set_family_options(specNum, spec):
+def set_family_options(n_clicks, specNum, spec):
     options = []
     for fam in vFam:
         temp = []
@@ -446,6 +508,8 @@ def set_family_options(specNum, spec):
 )
 def set_virus_options(family, spec, specNum):
     options = []
+    if family == 'none':
+        return []
     for v in vFam[family]:
         if v in specVirus[(spec, specNum)]:
             options.append(v)
@@ -455,19 +519,13 @@ def set_virus_options(family, spec, specNum):
 
 @app.callback(
     Output('numbers-dropdown', 'options'),
-    Input('countries-dropdown', 'value'), prevent_initial_call = True
+    Output('numbers-dropdown', 'value'),
+    Input('countries-dropdown', 'value'),
+    prevent_initial_call = True
 )
 def set_cities_options(selected_country):
-    return [{'label': i, 'value': i} for i in all_regions[selected_country]]
+    return [{'label': i, 'value': i} for i in all_regions[selected_country]], 'None'
 
-###############################################################################
-
-@app.callback(
-    Output('virus-dropdown', 'value'),
-    Input('virus-dropdown', 'options'), prevent_initial_call = True
-)
-def set_virus_value(available_options):
-    return available_options[0]['value']
 
 ###############################################################################
 
@@ -478,6 +536,7 @@ def set_virus_value(available_options):
     Output('inv-num', 'max'),
     Output('left-num', 'max'),
     Output('right-num', 'max'),
+    Output('overlap-num', 'max'),
     Input('submit', 'n_clicks'),
     Input('contig-num', 'value'),
     State('countries-dropdown', 'value'),
@@ -489,8 +548,7 @@ def pickContig(state, cNum, spec, specNum, virus):
 
     cNum -= 1
     dir = label2Specimen[(spec,int(specNum))]
-    pathN = '/Volumes/Data2/specimens/'+ dir + '/results/xml/' + dir +'_hits.xml'
-
+    pathN = '/Volumes/Data2/specimens/'+ dir + '/results2/xml/' + dir +'_hits.xml'
     nodeL = []
 
     parser = etree.XMLParser(remove_blank_text=True)
@@ -511,6 +569,7 @@ def pickContig(state, cNum, spec, specNum, virus):
     inversions = len(flanks.findall('inversion'))
     hitsLeft = contig.xpath('./vectorhitleft/@id')
     hitsRight = contig.xpath('./vectorhitright/@id')
+    hitsOverlap = len(contig.xpath('./vectorhitoverlap'))
     rCount = 0
     lCount = 0
     for x in hitsLeft:
@@ -519,7 +578,7 @@ def pickContig(state, cNum, spec, specNum, virus):
     for y in hitsRight:
         if y not in r:
             rCount += 1
-    return len(contigNames), pathN, matches, inversions, lCount, rCount
+    return len(contigNames), pathN, matches, inversions, lCount, rCount, hitsOverlap
 
 ###############################################################################
 
@@ -535,6 +594,7 @@ def pickContig(state, cNum, spec, specNum, virus):
     Input('inv-num', 'value'),
     Input('left-num', 'value'),
     Input('right-num', 'value'),
+    Input('overlap-num', 'value'),
     Input('left-scroll', 'n_clicks'),
     Input('right-scroll', 'n_clicks'),
     State('virus-dropdown', 'value'),
@@ -544,9 +604,10 @@ def pickContig(state, cNum, spec, specNum, virus):
     State('inv-num', 'max'),
     State('left-num', 'max'),
     State('right-num', 'max'),
+    State('overlap-num', 'max'),
     prevent_initial_call = True
 )
-def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev, next, virus, spec, specNum, mMax, invMax, lMax, rMax):
+def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, overlaps, prev, next, virus, spec, specNum, mMax, invMax, lMax, rMax, oMax):
 
     if path == "does not exist":
         fig = pyplot.figure()
@@ -562,6 +623,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
     totalInv = 0
     totalLeft = 0
     totalRight = 0
+    totalOverlaps = 0
     labelFontSize = 6
     axesFontSize = 8
     thickness = 12
@@ -609,9 +671,9 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
                                                color='#ff0000', fontdict = {'size': labelFontSize},
                                                label = stitle.lstrip('|') + ' ' + str(sstart) + '-' + str(send) + ' (' + str(length) + ' bp; ' + str(pident) + '%)')  #; ' + str(evalue) + ')')
         features.append(gf)
-#        sequence +=  f">{node}|{qstart}-{qend}{newline}{qseq}{newline}"
+        sequence +=  f">{node}|{qstart}-{qend}{newline}{qseq}{newline}"
 
-    sequence = f">{node}{newline}" + getContig(str(Path(path).parent.parent.parent), node.split('__')[0], 1) + '\n'
+    #sequence = f">{node}{newline}" + getContig(str(Path(path).parent.parent.parent), node.split('__')[0], 1) + '\n'
 
     caption = f"{virus} insertion sites in {spec} {specNum} ({node})"
     hitsLeft = contig.xpath('./vectorhitleft')
@@ -628,6 +690,8 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
 
     rCount = 0
     lCount = 0
+    oCount = len(hitsOverlap)
+
     for x in contig.xpath("./vectorhitleft/@id"):
         if x not in l:
             lCount += 1
@@ -714,7 +778,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
 
 
     aaCoverage = [0] * contigLength
-    for hits in (hitsLeft, hitsRight): #, hitsOverlap):
+    for hits in (hitsLeft, hitsRight, hitsOverlap):
         if len(hits) > 0:
             hitsDict = []  # consolidate query hit: [subject hits]
             countS = 0
@@ -730,7 +794,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
             else:
                 hitsDict.sort(key = lambda tup: tup[1][1])  # closest first
 
-            if leftFlanks > 0 or rightFlanks > 0:
+            if leftFlanks > 0 or rightFlanks > 0 or overlaps > 0:
                 if hits == hitsLeft:
                     flankNum = leftFlanks
                     if leftFlanks != 0:
@@ -739,6 +803,10 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
                     flankNum = rightFlanks
                     if rightFlanks != 0:
                         totalRight = math.ceil(rCount/rightFlanks)
+                else:
+                    flankNum = overlaps
+                    if overlaps != 0:
+                        totalOverlaps = math.ceil(oCount/overlaps)
 
                 for q in hitsDict[flankNum*imageNum : flankNum*imageNum + flankNum]:
                     qstart = int(q[1][0])
@@ -770,8 +838,10 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
                     features.append(GraphicFeature(start=qstart, end=qend, strand=strand, thickness=thickness, linewidth=0,
                                                color=color, fontdict = {'size': labelFontSize},
                                                label = seqid + ' {0:,}-{1:,} '.format(sstart, send) + '(' + strandStr + '), Dist: ' + str(distance) + ' bp'))
-    record = GraphicRecord(sequence_length = contigLength, features = features)
 
+
+
+    record = GraphicRecord(sequence_length = contigLength, features = features)
 
     fig, (ax1, ax2) = pyplot.subplots(2, 1, sharex = True, figsize = (10, 6), gridspec_kw = {'height_ratios': [5, 1]})
 
@@ -789,7 +859,7 @@ def drawContig(path, contigNum, matchNum, invNum, leftFlanks, rightFlanks, prev,
     data = base64.b64encode(buf.getbuffer()).decode('utf8')
     pic = f"""data:image/png;base64,{data}"""
 
-    imgmax = max(totalMatch, totalInv, totalLeft, totalRight) - 1
+    imgmax = max(totalMatch, totalInv, totalLeft, totalRight, totalOverlaps) - 1
 
     if imgmax <= 0:
         out = [True, True]

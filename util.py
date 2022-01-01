@@ -4,12 +4,13 @@ from Bio.SeqFeature import SeqFeature, FeatureLocation
 from dna_features_viewer import GraphicFeature, GraphicRecord, BiopythonTranslator
 from intervaltree import Interval, IntervalTree
 from lxml import etree as ET
-from matplotlib.backends.backend_pdf import PdfPages
 from multiprocessing import Process
 from pathlib import Path
 import copy
 import math
 import matplotlib
+matplotlib.use('agg')
+from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as pyplot
 import numpy as np
 import os
@@ -22,8 +23,6 @@ import time
 import urllib.request as web
 
 from config import *
-
-matplotlib.use('agg')
 
 ###############################################################################
 
