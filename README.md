@@ -227,9 +227,26 @@ In the following directory tree, `N` is used to represent the last in a series, 
             │   └── clustered
             │       ├── <VIRUS_FAMILY 1 VIRUS 1>_per_contig_aligned_clustered_k?.fasta
             │       ├── <VIRUS_FAMILY 1 VIRUS 1>_per_contig_aligned_clustered_k?.txt
+            │       ├── <VIRUS_FAMILY 1 VIRUS 1>
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_C1.fasta
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_C1_with_flanks.fasta
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_C2.fasta
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_C2_with_flanks.fasta
+            │       │   :
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_CN.fasta
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_CN_with_flanks.fasta
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_insertpositions_Chr1.tsv
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_insertpositions_Chr2.tsv
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_insertpositions_Chr3.tsv
+            │       │   ├── <VIRUS_FAMILY 1 VIRUS 1>_insertpositions.pdf
+            │       │   └── <VIRUS_FAMILY 1 VIRUS 1>_insertpositions.txt
             │       :
             │       ├── <VIRUS_FAMILY 1 VIRUS N>_per_contig_aligned_clustered_k?.fasta
-            │       └── <VIRUS_FAMILY 1 VIRUS N>_per_contig_aligned_clustered_k?.txt
+            │       ├── <VIRUS_FAMILY 1 VIRUS N>_per_contig_aligned_clustered_k?.txt
+            │       └── <VIRUS_FAMILY 1 VIRUS N>
+            │           ├── 
+            │           :   (as above)
+            │           └── 
             :
             └── <VIRUS_FAMILY N>
                 ├── 
