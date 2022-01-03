@@ -272,3 +272,5 @@ In the following directory tree, `N` is used to represent the last in a series, 
                 :   (as above)
                 └── 
 ```
+
+## XML format
