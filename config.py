@@ -2,7 +2,7 @@ import os
 import time
 from pathlib import Path
 
-EMAIL = 'jth005@bucknell.edu'    # needed to download fasta/gb files via Entrez
+EMAIL = 'yourname@somewhere.edu' # needed to download fasta/gb files via Entrez
 
 MP = False                       # If True, spawn one process per specimen.
                                  # If False, specimens are analyzed sequentially.
@@ -15,18 +15,13 @@ VERBOSE = False                  # If True, print most log messages to console a
    --------------------------------
 """
 
-#os.system('module load SPAdes')
-#os.system('module load ncbi-blast')
-#os.system('module load samtools')
-
-SPADES_EXEC = '/software/apps/SPAdes/3.15.4/bin/spades.py'
-BLAST_EXEC = '/software/apps/ncbi-blast/2.11.0+/bin/blastn'
-SAMTOOLS_EXEC = '/software/apps/samtools/current/bin/samtools'
-
-ROOT_DIR = '/home/jth005/eve/data/'       # root directory where all data files related to EVE will be located
-SPECIMENS_DIR = ROOT_DIR + 'specimens/'   # path for original specimen BAM files
-RESULTS_DIR = ROOT_DIR + 'results/'       # path for results
-BLASTDB_DIR = ROOT_DIR + 'blastdb/'       # path of blast databases
+SPADES_EXEC = 'spades.py'                # full path to spades.py
+BLAST_EXEC = 'blastn'                    # full path to blastn
+SAMTOOLS_EXEC = 'samtools'               # full path to samtools
+ROOT_DIR = '/Volumes/Data/'              # root directory where all data files related to EVE will be located
+SPECIMENS_DIR = ROOT_DIR + 'specimens/'  # path to original specimen BAM files
+RESULTS_DIR = ROOT_DIR + 'results/'      # path to results
+BLASTDB_DIR = ROOT_DIR + 'blastdb/'      # path to blast databases
 
 """
    Specimen parameters
