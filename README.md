@@ -272,3 +272,34 @@ In the following directory tree, `N` is used to represent the last in a series, 
                 :   (as above)
                 └── 
 ```
+
+## Output file descriptions
+
+For each specimen, two FASTA files are created:
+- `<SPECIMEN>_hits_unaligned.fasta` contains the sequences of all viral hits found for that specimen.
+
+- `<SPECIMEN>_hits_aligned.fasta` contains the sequences of all viral hits, aligned to the reference genome of the respective virus.  The FASTA file alternates between specimen and viral reference sequences, each pair representing an alignment. 
+
+For each virus species, four additional FASTA files are created:
+- `<VIRUS ACC>_per_specimen_aligned.fasta` contains one entry for each specimen in which this virus was found.  Each entry contains all regions of the virus found in that specimen, aligned to the virus reference genome, which is the first entry in the file.
+
+- `<VIRUS ACC>_per_contig_aligned.fasta` contains one entry per contig per specimen in which the virus was found.  These are also aligned to the virus reference genome and used later to cluster hits.
+
+- `<VIRUS ACC>_per_contig_unaligned.fasta` also contains one entry per contig per specimen, but they are not aligned.  Each of these entries represents a putative NIRVS.
+
+- `<VIRUS ACC>_per_contig_with_flanks.fasta` contains the sequences in the previous file, with flanking regions from the contig in which it was found
+
+Third, for each virus family, three FASTA files are created:
+- `<VIRUS FAMILY>_per_specimen_aligned.fasta`
+- `<VIRUS FAMILY>_per_contig_aligned.fasta`
+- `<VIRUS FAMILY>_per_contig_unaligned.fasta`
+
+In the first two files, sequences are aligned to the reference genome of the virus species with the most hits within a viral family.  The third file contains the raw, unaligned sequences.
+
+Once the hits are k-means clustered, these results are written to new FASTA files with filename ending `_clustered_kx.fasta` (where `x` is the final value of k) and with each sequence identifier prefixed by `Cy_`, where `y` is a cluster number. 
+
+The raw putative insertion sites are written to tab-delimited (TSV) files, one per chromosome, named `<VIRUS ACC>_insertpositions_chrX.tsv` where `X` is a chromosome number.
+
+Putative insertion positions are consolidated by groups of specimens sharing the same set of insertion sites and written to a text file named `<VIRUS ACC>_insertpositions.txt`.
+
+## XML format
