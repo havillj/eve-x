@@ -127,12 +127,12 @@ def meanSilhouetteValue(clusters, data):
     return total / len(data)
 
 def findClusters(fileName, omitFirst = True, minK = config['MIN_K'], maxK = config['MAX_K']):
-    print('Clustering aligned sequences in ' + fileName + '...')
+    writelog('Clustering aligned sequences in ' + fileName + '...', VERBOSE)
     
     aln = AlignIO.read(fileName, 'fasta') # Bio.Align.MultipleSeqAlignment object
     
     if len(aln) <= 2:
-        print('  Skipping - too few sequences to cluster.')
+        writelog('  Skipping - too few sequences to cluster.', VERBOSE)
         return None
 
     d = {'-': 0, 'a': 1, 'c': 2, 'g': 3, 't': 4, 'A': 1, 'C': 2, 'G': 3, 'T': 4}
@@ -161,28 +161,37 @@ def findClusters(fileName, omitFirst = True, minK = config['MIN_K'], maxK = conf
 #    silhouettes[1] = [(meanSilhouetteValue(clusters, data), clusters)]
     for k in range(minK, min(maxK, len(data)) + 1):
         silhouettes[k] = []
-        print('  k = ' + str(k))
-        print('  Trial ', end='')
+        writelog('  k = ' + str(k), VERBOSE)
+        trialStr = '  Trial '
+        if VERBOSE:
+            print(trialStr, end = '')
         for trial in range(1, config['KMEANS_TRIALS'] + 1):
-            print(str(trial), end=' ', flush=True)
+            if VERBOSE:
+                print(str(trial), end=' ', flush=True)
+            else:
+                trialStr += str(trial) + ' '
             clusters = kmeans(data, k)
             silhouettes[k].append((meanSilhouetteValue(clusters, data), clusters))
-        print()
+        if VERBOSE:
+            print()
+        else:
+            writelog(trialStr, VERBOSE)
 
-    print('\n  Silhouette values:')
+    writelog('\n  Silhouette values:', VERBOSE)
     maxSV = -1
 #    maxSV = silhouettes[1][0][0]
 #    bestK = 1
 #    clusters = silhouettes[1][0][1]
     for k in range(minK, min(maxK, len(data)) + 1):
         silhouettes[k].sort(reverse = True)
-        print('  {0:>2}: '.format(k), end='')
+        silStr = '  {0:>2}: '.format(k)
         sumSV = 0
         for i in range(config['KMEANS_TRIALS'] - 1):
-            print('{0:6.4f}, '.format(silhouettes[k][i][0]), end='')
+            silStr += '{0:6.4f}, '.format(silhouettes[k][i][0])
             sumSV += silhouettes[k][i][0]
         sumSV += silhouettes[k][-1][0]
-        print('{0:6.4f} (average = {1:6.4f})'.format(silhouettes[k][-1][0], sumSV / config['KMEANS_TRIALS']))
+        silStr += '{0:6.4f} (average = {1:6.4f})'.format(silhouettes[k][-1][0], sumSV / config['KMEANS_TRIALS'])
+        writelog(silStr, VERBOSE)
         if silhouettes[k][0][0] > maxSV:
             maxSV = silhouettes[k][0][0]
             bestK = k
@@ -191,9 +200,9 @@ def findClusters(fileName, omitFirst = True, minK = config['MIN_K'], maxK = conf
     realK = sum(len(cluster) > 0 for cluster in clusters)
             
     if realK == bestK:
-        print('\n  Best k = ' + str(bestK) + ' clusters have silhouette value = ' + '{0:6.4f}'.format(maxSV) + '.\n')
+        writelog('\n  Best k = ' + str(bestK) + ' clusters have silhouette value = ' + '{0:6.4f}'.format(maxSV) + '.\n', VERBOSE)
     else:
-        print('\n  Best k = ' + str(realK) + ' (' + str(bestK) + ' minus ' + str(bestK - realK) + ' empty) clusters have silhouette value = ' + '{0:6.4f}'.format(maxSV) + '.\n')
+        writelog('\n  Best k = ' + str(realK) + ' (' + str(bestK) + ' minus ' + str(bestK - realK) + ' empty) clusters have silhouette value = ' + '{0:6.4f}'.format(maxSV) + '.\n', VERBOSE)
 
     records = [aln[0]]
     clusters.sort(key = lambda c: len(c), reverse = True)  # start with largest cluster
@@ -209,8 +218,6 @@ def findClusters(fileName, omitFirst = True, minK = config['MIN_K'], maxK = conf
         clusters[index1], clusters[minIndex] = clusters[minIndex], clusters[index1]
         centroids[index1], centroids[minIndex] = centroids[minIndex], centroids[index1]
 
-#        print('\n  Best k = ' + str(k) + ' clusters:\n')
-
     clusteredPath = Path(fileName).parent / 'clustered' 
     if not clusteredPath.exists():
         os.system('mkdir ' + str(clusteredPath))
@@ -222,10 +229,10 @@ def findClusters(fileName, omitFirst = True, minK = config['MIN_K'], maxK = conf
         if len(cluster) > 0:
             regionCounts[clusterNum] = {}
             cluster.sort(key = lambda i: ids[i])
-            print('  Cluster ' + str(clusterNum))
+            writelog('  Cluster ' + str(clusterNum), VERBOSE)
             outputText.write('  Cluster ' + str(clusterNum) + '\n')
             for index in cluster:
-                print('    ' + ids[index])
+                writelog('    ' + ids[index], VERBOSE)
                 outputText.write('    ' + ids[index] + '\n')
                 specimenName = ids[index].split('_|_')[0]
                 region, num = getSpecimenLabel(specimenName)
@@ -241,26 +248,26 @@ def findClusters(fileName, omitFirst = True, minK = config['MIN_K'], maxK = conf
                 records[-1].description = 'C' + str(clusterNum) + '_|_' + d
                 records[-1].id = records[-1].description
                 records[-1].name = records[-1].description
-            print('\n    Region counts: ')
+            writelog('\n    Region counts: ', VERBOSE)
             outputText.write('\n    Region counts (total / unique specimens): \n')
             sortedRegions = list(regionCounts[clusterNum].keys())
             sortedRegions.sort()
             for region in sortedRegions:
-                print('      ' + region + ' - ' + str(len(regionCounts[clusterNum][region])) + ' / ' + str(len(set(regionCounts[clusterNum][region]))))
+                writelog('      ' + region + ' - ' + str(len(regionCounts[clusterNum][region])) + ' / ' + str(len(set(regionCounts[clusterNum][region]))), VERBOSE)
                 outputText.write('      ' + region + ' - ' + str(len(regionCounts[clusterNum][region])) + ' / ' + str(len(set(regionCounts[clusterNum][region]))) + '\n')
             clusterNum += 1
-            print()
+            writelog('', VERBOSE)
             outputText.write('\n')
     outputText.close()
     
     newAlignment = MultipleSeqAlignment(records)
     AlignIO.write(newAlignment, clusteredFileName + '.fasta', 'fasta')
-    print('  Clustered alignment written to ' + clusteredFileName + '.fasta')
+    writelog('  Clustered alignment written to ' + clusteredFileName + '.fasta', VERBOSE)
     
     return clusteredFileName + '.fasta'
 
 def usage():
-    print('Usage: ' + sys.argv[0] + ' [--min_k=k] [--max_k=k] [--omit_first] filename.fasta')
+    writelog('Usage: ' + sys.argv[0] + ' [--min_k=k] [--max_k=k] [--omit_first] filename.fasta', VERBOSE)
     
 def main():
     if len(sys.argv) < 2:

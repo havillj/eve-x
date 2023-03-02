@@ -276,11 +276,11 @@ app = dash.Dash()
 app.layout = html.Div(
 
     children =[
-    html.H1(id = 'header', children='EVEs In Aedes aegypti Mosquitoes',style={'textAlign': 'center'}),
+    html.H1(id = 'header', children='EVE Contig Viewer',style={'textAlign': 'center'}),
 
-    html.Div(style ={'textAlign': 'center'}, children=['Contig Diagrams for EVE in AAa genome',]),
+#    html.Div(style ={'textAlign': 'center'}, children=['Contig Diagrams for EVE in AAa genome',]),
 
-    html.P("To enable more convenient appraisal of individual contigs, EVE produces diagrams of the viral hits in each contig (only the best hit). To see different contigs containing viral hits, select a specimen and virus.",
+#    html.P("To enable more convenient appraisal of individual contigs, EVE produces diagrams of the viral hits in each contig (only the best hit). To see different contigs containing viral hits, select a specimen and virus.",
      style = {'textAlign': 'center'}),
 
     html.Br(),

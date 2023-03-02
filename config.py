@@ -2,18 +2,31 @@ import os
 import time
 from pathlib import Path
 
+EMAIL = 'jth005@bucknell.edu'    # needed to download fasta/gb files via Entrez
+
+MP = False                       # If True, spawn one process per specimen.
+                                 # If False, specimens are analyzed sequentially.
+
+VERBOSE = False                  # If True, print most log messages to console as well.
+                                 # Set to FALSE if MP is True or if submitting as a batch job.
+
 """ 
    Configurable path and file names
    --------------------------------
 """
 
-SPADES_EXEC = '/Volumes/Data/bin/SPAdes-3.14.1-Linux/bin/spades.py'
-BLAST_EXEC = 'blastn'
-SAMTOOLS_EXEC = 'samtools'
+#os.system('module load SPAdes')
+#os.system('module load ncbi-blast')
+#os.system('module load samtools')
 
-ROOT_DIR = '/Volumes/Data2/'             # root directory where all data files related to EVE will be located
-SPECIMENS_DIR = ROOT_DIR + 'specimens/'  # path for original specimen BAM files
-RESULTS_DIR = ROOT_DIR + 'results3/'     # path for results
+SPADES_EXEC = '/software/apps/SPAdes/3.15.4/bin/spades.py'
+BLAST_EXEC = '/software/apps/ncbi-blast/2.11.0+/bin/blastn'
+SAMTOOLS_EXEC = '/software/apps/samtools/current/bin/samtools'
+
+ROOT_DIR = '/home/jth005/eve/data/'       # root directory where all data files related to EVE will be located
+SPECIMENS_DIR = ROOT_DIR + 'specimens/'   # path for original specimen BAM files
+RESULTS_DIR = ROOT_DIR + 'results/'       # path for results
+BLASTDB_DIR = ROOT_DIR + 'blastdb/'       # path of blast databases
 
 """
    Specimen parameters
@@ -34,6 +47,9 @@ A dictionary used in the getSpecimenLabel function to determine the
 population to which a particular specimen belongs.  If any of the strings 
 in the list corresponding to a particular key is contained in the specimen 
 name, then that key is used as the population name. 
+
+Note that the specimen number within a population is assumed to be the last
+numeric value in the BAM filename before the first period.
 """
 
 POPULATIONS = {'Angola': ['Angola'], 
@@ -177,6 +193,13 @@ Configurable variables by function
        must be found at a particular host location to show that location in the 
        insertpositions text file.
        
+     MAX_REPEATS_TO_SHOW_POSITION (non-negative integer)
+       In a contig, a region may be homologous to a repeat in the host
+       reference genome.  To avoid having these repeats add noise to the
+       insertpositions files and plots, if a contig region is homologous to
+       more than this number of regions in the host reference genome, 
+       it will be omitted.
+       
 """
 
 config = {'MIN_PIDENT': 80,
@@ -191,10 +214,11 @@ config = {'MIN_PIDENT': 80,
           'FLANK_DRAW_LIMIT': 5,
           'HOST_OVERLAP_FRACTION': 0.8,
           'KMEANS_TRIALS': 15,
-          'MAX_FLANK_DISTANCE': 20000,
+          'MAX_FLANK_DISTANCE': 10000,
           'MAX_HOST_VIRUS_DISTANCE': 200,    
           'MAX_K': 12,
           'MAX_KMEANS_ITERATIONS': 100,
+          'MAX_REPEATS_TO_SHOW_POSITION': 20,
           'MIN_FLANKING_HIT_LENGTH': 100,
           'MIN_HITS_TO_SHOW_POSITION': 1,
           'MIN_HITS_TO_SHOW_VIRUS': 2,
@@ -231,7 +255,7 @@ FEATURE_TREES_PICKLED_FILENAME = ROOT_DIR + 'featuretrees.pickle'
 FAMILY_CSV = ROOT_DIR + 'families.csv'
 
 LOGFILE_DIR = ROOT_DIR + 'log/'
-LOGFILE_NAME = 'eve_' + time.strftime('%Y-%m-%d_%H:%M:%S') + '.log'
+LOGFILE_NAME = 'eve_' + time.strftime('%Y-%m-%d-%H%M%S') + '.log'
 LOGFILE_PATH = Path(LOGFILE_DIR) / LOGFILE_NAME 
 
 if 'logfile' not in globals():
@@ -242,3 +266,5 @@ if 'logfile' not in globals():
 #'MIN_FLANKING_QSTART': 10        # min distance a flanking hit must be from either end of the contig  # REMOVE PROBABLY
 #'MAX_FLANKING_HITS': 10
 #'FIND_FEATURES': True
+
+os.environ['BLASTDB'] = BLASTDB_DIR

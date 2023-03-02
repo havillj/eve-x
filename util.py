@@ -48,7 +48,7 @@ def getSpecimenLabel(specimen):
                 
     p = re.compile(r'[0-9]+')
     try:
-        num = int(p.findall(specimen)[0])
+        num = int(p.findall(specimen)[-1])  # number assigned to be last number in name
     except:
         num = 0
     
@@ -122,7 +122,7 @@ def getGenBank(accessionID):
 	Query NCBI to get a gb file.
 	"""
 	
-	Entrez.email = 'havill@denison.edu'
+	Entrez.email = EMAIL
 	try:
 		handle = Entrez.efetch(db = 'nucleotide', id = accessionID, rettype = 'gb', retmode = 'text')
 	except:
@@ -142,7 +142,7 @@ def getFamily(accessionID):
     Query NCBI to get family of virus corresponding to an accession number.
     """
     
-    Entrez.email = 'havill@denison.edu'
+    Entrez.email = EMAIL
     try:
         handle = Entrez.efetch(db = 'nucleotide', id = accessionID, rettype = 'native', retmode = 'xml')
         result = handle.read()
@@ -150,6 +150,7 @@ def getFamily(accessionID):
         writelog('Exception:', sys.exc_info()[1])
         return ''
         
+    result = bytes(result, 'utf-8')
     root = ET.fromstring(result)
     lineage = root.find('.//OrgName_lineage')
 

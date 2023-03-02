@@ -7,6 +7,7 @@ from hosthit import HostHit
 from diagramhit import DiagramHits
 from kmeans import findClusters
 from features import *
+from multiprocessing import Process
 
 ###############################################################################
 
@@ -27,7 +28,7 @@ def getUnmappedReads(filenameBAM):
     
     newFilenameBAM = specimenResultsPath / (shortName + '_unmapped_with_mates.bam')  # absolute path
 
-    writelog('Getting unmapped reads ...', True)
+    writelog('Getting unmapped reads ...', VERBOSE)
 
     if not newFilenameBAM.exists():
         bamfile = pysam.AlignmentFile(str(filenameBAM), 'rb', threads=8)
@@ -45,10 +46,10 @@ def getUnmappedReads(filenameBAM):
         bamfile.close()
         newBAM.close()
 
-        writelog('   Total reads = ' + str(count_total), True)
-        writelog('   Unmapped reads = ' + str(count) + ' ({:.2f}%)'.format(100*count/count_total), True)
+        writelog('   Total reads = ' + str(count_total), VERBOSE)
+        writelog('   Unmapped reads = ' + str(count) + ' ({:.2f}%)'.format(100*count/count_total), VERBOSE)
     else:
-        writelog('   Skipping - ' + str(newFilenameBAM) + ' exists.', True)
+        writelog('   Skipping - ' + str(newFilenameBAM) + ' exists.', VERBOSE)
         
     return newFilenameBAM  # absolute path
     
@@ -64,7 +65,7 @@ def writeReadsFASTQ(filenameBAM):
        Return value: absolute path of SPAdes working directory as a Path object
     """
     
-    writelog('Writing paired-end reads to FASTQ files ...', True)
+    writelog('Writing paired-end reads to FASTQ files ...', VERBOSE)
     
     spadesPath = filenameBAM.parent / SPADES_DIR
     
@@ -72,7 +73,7 @@ def writeReadsFASTQ(filenameBAM):
         os.system('mkdir ' + str(spadesPath))
         
     if (spadesPath / 'viral1.fastq').exists():
-        writelog('   Skipping - FASTQ files exist.', True)
+        writelog('   Skipping - FASTQ files exist.', VERBOSE)
     else:
         os.system(SAMTOOLS_EXEC + ' fastq -1 ' + str(spadesPath / 'viral1.fastq') 
                   + ' -2 ' + str(spadesPath / 'viral2.fastq') 
@@ -92,11 +93,11 @@ def assembleReads(dirName):
        Return value: Boolean indicating whether assembly was successful
     """
 
-    writelog('Assembling reads with SPAdes ...', True)
+    writelog('Assembling reads with SPAdes ...', VERBOSE)
     
     spadesPath = Path(dirName)
     if (spadesPath / 'scaffolds.fasta').exists():
-        writelog('   Skipping - scaffolds.fasta exists.', True)
+        writelog('   Skipping - scaffolds.fasta exists.', VERBOSE)
         return True
         
     viral1Name = str(spadesPath / 'viral1.fastq')
@@ -133,12 +134,12 @@ def blastScaffolds(dirName, force = False):
     scaffoldsName = str(spadesPath / 'scaffolds.fasta')
     outVirusCSV = spadesPath / 'blast_scaffolds.csv'
     
-    writelog('BLASTing scaffolds against viral database ...', True)
+    writelog('BLASTing scaffolds against viral database ...', VERBOSE)
     
     if not force and outVirusCSV.exists():
-        writelog('   Skipping - ' + str(outVirusCSV) + ' exists.', True)
+        writelog('   Skipping - ' + str(outVirusCSV) + ' exists.', VERBOSE)
     else:
-        os.system(BLAST_EXEC + ' -query ' + scaffoldsName 
+        result = os.system(BLAST_EXEC + ' -query ' + scaffoldsName 
                       + ' -db ' + VIRUS_DB 
                       + ' -num_threads 16'
                       + ' -task blastn' 
@@ -147,8 +148,11 @@ def blastScaffolds(dirName, force = False):
                       + ' -gapopen 2'
                       + ' -outfmt "10 qseqid qstart qend qseq sstart send sseq evalue bitscore sseqid stitle pident"'
                       + ' -out ' + str(outVirusCSV))
-
 #                 ' -gapopen 5 -gapextend 2 -penalty -3 -reward 2 -word_size 11'
+
+        if result != 0:
+            writelog('blastn failed with error ' + str(result), VERBOSE)
+            exit(1)
 
 ###############################################################################
                   
@@ -262,7 +266,7 @@ def getHits(dirName):
        Return value: absolute path of XML file containing results
     """
     
-    writelog('Combining BLAST results to locate putative EVEs...', True)
+    writelog('Combining BLAST results to locate putative EVEs...', VERBOSE)
     
     spadesPath = Path(dirName) / SPADES_DIR              # specimen assembly dir
         
@@ -365,13 +369,17 @@ def getHits(dirName):
     for contig in virusHits:
         # search for host hits using megablast
         SeqIO.write(scaffoldRecords[contig], str(spadesPath / 'contig_temp.fasta'), 'fasta')
-        os.system(BLAST_EXEC + ' -query ' + str(spadesPath / 'contig_temp.fasta')
+        result = os.system(BLAST_EXEC + ' -query ' + str(spadesPath / 'contig_temp.fasta')
                       + ' -db ' + HOST_DB 
                       + ' -num_threads 8'
                       + ' -evalue ' + str(config['EVALUE_HOST'])
                       + ' -max_target_seqs 100'
                       + ' -outfmt "10 qseqid qstart qend qseq sseqid sstart send sseq evalue bitscore"'
                       + ' -out ' + str(spadesPath / 'blast_contig_temp.csv'))
+        if result != 0:
+            writelog('megablast failed with error ' + str(result), VERBOSE)
+            exit(1)
+            
         hostHits = readCSV_host(str(spadesPath / 'blast_contig_temp.csv'))
 
         all_viral_hits.extend([(v.sseqid, v.stitle) for v in virusHits[contig]])  
@@ -509,7 +517,7 @@ def getHits(dirName):
                     ET.SubElement(hostElement, 'bitscore').text = str(hostHit.bitscore)
                     
             matchingFlanks = ET.SubElement(contigTree, 'flanks')
-            # find pairs of before/after host hits that are on the same strand and within config['MAX_FLANK_DISTANCE'] of each other
+            # find pairs of before/after host hits that are within config['MAX_FLANK_DISTANCE'] of each other
             for b in before:
                 beforeHit = hostHits[contig][b]
                 for a in after:
@@ -524,8 +532,9 @@ def getHits(dirName):
                             if (beforeStart < beforeEnd < afterStart + config['ALLOWED_OVERLAP'] < afterEnd + config['ALLOWED_OVERLAP']) or \
                                (beforeStart > beforeEnd > afterStart - config['ALLOWED_OVERLAP'] > afterEnd - config['ALLOWED_OVERLAP']):
                                 ET.SubElement(matchingFlanks, 'match', {'leftid': str(b), 'rightid': str(a)})
-                            else:
+                            elif ((beforeStart < beforeEnd) and (afterStart > afterEnd)) or ((beforeStart > beforeEnd) and (afterStart < afterEnd)):
                                 ET.SubElement(matchingFlanks, 'inversion', {'leftid': str(b), 'rightid': str(a)})
+                            # else probably a LTR
      
     tree.write(xmlFilename, xml_declaration=True, pretty_print=True)
         
@@ -547,7 +556,7 @@ def drawContigs(fileName):
     if not diagramsPath.exists():
         os.mkdir(str(diagramsPath))
     else:
-        os.system('rm -r ' + str(diagramsPath) + '/*')
+        os.system('rm -r ' + str(diagramsPath) + '/')
         
     fams = readFamFile()
     
@@ -751,7 +760,7 @@ def drawContigs(fileName):
         ax2.tick_params(axis='both', which='major', labelsize=axesFontSize)
         ax2.set_ylim(bottom = 0, top = max(aaCoverage + [1]))
         ax2.set_yticks([0, max(aaCoverage + [1]) // 2, max(aaCoverage + [1])])
-        ax2.set_ylabel('Aa hits', fontsize = axesFontSize)
+        ax2.set_ylabel('Host hits', fontsize = axesFontSize)
 
         familyDir = str(diagramsPath / family)
         if not Path(familyDir).exists():
@@ -918,7 +927,7 @@ def consolidateAll():
        Write a FASTA file containing specimen EV regions aligned to viral reference genome
     """
     
-    writelog('Consolidating results in ' + RESULTS_DIR + '...', True)
+    writelog('Consolidating results in ' + RESULTS_DIR + '...', VERBOSE)
         
     viralHits1 = {}
     viralHits2 = {}
@@ -952,7 +961,7 @@ def consolidateAll():
         region = region.replace(' ', '-')
         specimen2Label[specimen] = (region, num)
         label2Specimen[(region, num)] = specimen
-        writelog('  Processing ' + str(specimenCount) + '/' + str(len(xmlFiles)) + ': ' + specimen, True)
+        writelog('  Processing ' + str(specimenCount) + '/' + str(len(xmlFiles)) + ': ' + specimen, VERBOSE)
         specimenCount += 1
         seqPath = file.parent.parent / SEQUENCES_DIR
         if not seqPath.exists():
@@ -1164,6 +1173,8 @@ def consolidateAll():
                 viralSeqs[(seqid, stitle)][specimen][contigName] = ''
                     
         referenceFilename = FASTA_DIR + seqid + '.fasta'
+        if not Path(FASTA_DIR).exists():
+            os.mkdir(FASTA_DIR)
         refRecord = getSeqRecord(referenceFilename, seqid)
         referenceSeq = str(refRecord.seq)
         virusLength = len(referenceSeq)
@@ -1279,6 +1290,9 @@ def consolidateAll():
     # blastn -task blastn -query results20k/viruses/sequences/Flaviviridae/sequences_NC_027819.1_per_contig_unaligned.fasta 
     #        -subject fasta/NC_001564.2.fasta -evalue 1e-10 -no_greedy
     # -outfmt "10 qseqid qstart qend qseq sstart send sseq evalue bitscore sseqid stitle pident"
+        
+    if not Path(GB_DIR).exists():
+        os.mkdir(GB_DIR)
         
     for family in set(allFamilies):
         FAMILY_DIR = Path(VIRUS_RESULTS_DIR) / SEQUENCES_DIR / family
@@ -1450,13 +1464,13 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showPlot,
         if len(virusRecord2.description) > 80:
             virusName += '...'
         virusName += ')'
-        writelog('  Creating diagram' + 's' * separatePops + ' for family ' + family + ' (using representative ' + virusRecord2.id + ')...', True)
+        writelog('  Creating diagram' + 's' * separatePops + ' for family ' + family + ' (using representative ' + virusRecord2.id + ')...', VERBOSE)
     else:
         virusName = virusRecord2.id + ': ' + virusRecord2.description[:80]
         if len(virusRecord2.description) > 80:
             virusName += '...'
         virusName += ' (' + family + ')'
-        writelog('  Creating diagram' + 's' * separatePops + ' for ' + virusName + '...', True)
+        writelog('  Creating diagram' + 's' * separatePops + ' for ' + virusName + '...', VERBOSE)
                 
     features = {}
     for specimen in allSpecimens:
@@ -1576,7 +1590,7 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showPlot,
         pyplot.close(fig)
 
 def getHitsForDiagram():
-    writelog('  Reading hits for diagrams ...', True)
+    writelog('  Reading hits for diagrams ...', VERBOSE)
     dir = Path(SPECIMEN_RESULTS_DIR)
     subdirs = [d for d in dir.iterdir()]
     files = [d / XML_DIR / (d.name + '_hits.xml') for d in subdirs]
@@ -1586,7 +1600,7 @@ def getHitsForDiagram():
     allSpecimens = []
     for file in files:
         specimen = file.name.split('_hits')[0]
-#        writelog('Getting hits for ' + specimen + '...', True)
+#        writelog('Getting hits for ' + specimen + '...', VERBOSE)
         allSpecimens.append(specimen)
         tree = ET.parse(str(file))
         root = tree.getroot()
@@ -1661,7 +1675,7 @@ def drawFamily(families, famACCs, separatePops, showPlot, small):
         famACCs = None
     
 def drawAll(separatePops = False):
-    writelog('Creating diagrams ...', True)
+    writelog('Creating diagrams ...', VERBOSE)
     allVirusHits, allSpecimens = getHitsForDiagram()
     
     fams = readFamFile()
@@ -1684,60 +1698,46 @@ def doIt(filenameBAM):
     newFilenameBAM = getUnmappedReads(filenameBAM)
     spadesPath = writeReadsFASTQ(newFilenameBAM)
     success = assembleReads(spadesPath) # 1. Assemble
+    dirName = spadesPath.parent
     if success:
-        dirName = spadesPath.parent
         blastScaffolds(dirName)         # 2. Blast scaffolds
         xmlFilename = getHits(dirName)  # 3. Get hits
         if xmlFilename is not None:
             drawContigs(xmlFilename)    # 4. Draw contigs
         else:
-            writelog('*** ' + str(Path(dirName).name) + ': no results found. ***', True)
+            writelog('*** ' + str(Path(dirName).name) + ': no results found. ***', VERBOSE)
     else:
-        writelog('*** ' + str(Path(dirName).name) + ': assembly failed; no results found. ***', True)
+        writelog('*** ' + str(Path(dirName).name) + ': assembly failed; no results found. ***', VERBOSE)
         
-    writelog('*** ' + str(Path(dirName).name) + ' done. ***', True)
+    writelog('*** ' + str(Path(dirName).name) + ' done. ***', VERBOSE)
 
 def doAll():
-#    fileList = sorted(Path(SPECIMENS_DIR).rglob('*.bam'))
-    fileList = [Path('/Volumes/Data2/specimen_copies/Angola/Debug010_aegypti_Cuanda_Angola_01.LIN210A1719.sorted.deduped.merged.bam')]
+    fileList = sorted(Path(SPECIMENS_DIR).rglob('*.bam'))
 
     count = 0
     for file in fileList:
         count += 1
-        writelog('\n' + str(count) + '/' + str(len(fileList)) + ': ' + file.name, True)
+        writelog('\n' + str(count) + '/' + str(len(fileList)) + ': ' + file.name, VERBOSE)
         doIt(file.resolve())
-                    
-# def doAllParallel2():
-#     dirList = [dir for dir in Path(SPECIMENS_DIR).iterdir() if dir.is_dir() and ('combined' not in dir.name)]
-#     workers = []
-#     count = 0
-#     for dir in dirList:
-#         for file in dir.iterdir():
-#             if not file.is_dir() and (file.name[-26:] == '.sorted.deduped.merged.bam'):
-#                 p = Process(target = doIt, args = (str(dir.resolve()), file.name))
-#                 workers.append(p)
-#                 p.start()
-#                 count += 1
-#                 
-#                 while count == 2:
-#                     for index in range(len(workers)):
-#                         p = workers[index]
-#                         p.join(3)
-#                         if not p.is_alive():
-#                             count -= 1
-#                             workers.pop(index)
-#                             break
-#                         
-#                 break
-#         
-#     for p in workers:
-#         p.join()
-#         
-#     os.system('cp ' + ROOT_DIR + '/*/spades_all/*hits.xml ' + str(Path(ROOT).parent) + '/results/HITS_all')
-#     consolidateAll(str(Path(ROOT_DIR).parent) + '/results/HITS_all', 'all')
+
+def doAllProcesses():
+    fileList = sorted(Path(SPECIMENS_DIR).rglob('*.bam'))
+
+    count = 0
+    workers = []
+    for file in fileList:
+        count += 1
+        writelog('\n' + str(count) + '/' + str(len(fileList)) + ': ' + file.name, VERBOSE)
+        
+        p = Process(target = doIt, args = (file.resolve(),))
+        workers.append(p)
+        p.start()
+        
+    for p in workers:
+        p.join()
 
 def usage():
-    print('Usage: ' + sys.argv[0] + ' [--OPTION1=VALUE1 --OPTION2=VALUE2 ...]')
+    writelog('Usage: ' + sys.argv[0] + ' [--OPTION1=VALUE1 --OPTION2=VALUE2 ...]', VERBOSE)
     
 def processCmdLine():
     for arg in sys.argv[1:]:
@@ -1754,11 +1754,20 @@ def processCmdLine():
         if left not in config:
             usage()
             return False
+        elif isinstance(config[left], bool):
+            if right not in ['True', 'False']:
+                writelog('Error: expected a True/False value for option ' + left + '.', VERBOSE)
+                return False
+            else:
+                if right == 'True':
+                    config[left] = True
+                else:
+                    config[left] = False
         elif isinstance(config[left], int):
             try:
                 right = int(right)
             except:
-                print('Error: expected an integer value for option ' + left + '.')
+                writelog('Error: expected an integer value for option ' + left + '.', VERBOSE)
                 return False
             else:
                 config[left] = right
@@ -1766,41 +1775,42 @@ def processCmdLine():
             try:
                 right = float(right)
             except:
-                print('Error: expected a numeric value for option ' + left + '.')
+                writelog('Error: expected a numeric value for option ' + left + '.', VERBOSE)
                 return False
             else:
                 config[left] = right
-        elif isinstance(config[left], bool):
-            if right not in ['True', 'False']:
-                print('Error: expected a True/False value for option ' + left + '.')
-                return False
-            else:
-                if right == 'True':
-                    config[left] = True
-                else:
-                    config[left] = False
                         
     return True
     
 def main():
     if not processCmdLine():
-        return
+        exit(1)
+        
+    global VERBOSE
     
-    if Path(RESULTS_DIR).exists():
-        answer = ' '
-        while answer not in 'yYnN':
-            answer = input('Results directory ' + RESULTS_DIR + ' exists.  OK to write (y/n)? ')
-        if answer[0] not in 'yY':
-            writelog('OK, quitting.', True)
-            return 1
+    if VERBOSE:
+        if Path(RESULTS_DIR).exists():
+            answer = ' '
+            while answer not in 'yYnN':
+                answer = input('Results directory ' + RESULTS_DIR + ' exists.  OK to write (y/n)? ')
+            if answer[0] not in 'yY':
+                writelog('OK, quitting.', True)
+                exit(1)
+        else:
+            os.system('mkdir ' + RESULTS_DIR)
     else:
-        os.system('mkdir ' + RESULTS_DIR)
+        if not Path(RESULTS_DIR).exists():
+            os.system('mkdir ' + RESULTS_DIR)
         
     writelog('\n************************************************')
-    writelog('Starting pipeline on ' + time.strftime('%c'))
+    writelog('Starting EVE at ' + time.strftime('%c'))
     writeConfig()
     
-    doAll()
+    if MP:
+        VERBOSE = False
+        doAllProcesses()
+    else:
+        doAll()
     
     consolidateAll()
     drawAll(False)

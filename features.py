@@ -63,19 +63,19 @@ def makeIntervalTrees():
         
     pickleName = str(FEATURE_TREES_PICKLED_FILENAME)
     if Path(pickleName).exists():
-        writelog('Pickled feature trees found.  Reading...', True)
+        writelog('Pickled feature trees found.  Reading...', VERBOSE)
         picklediTreesDict = open(pickleName, 'rb')
         iTrees = pickle.load(picklediTreesDict)
         picklediTreesDict.close()
     else:
         iTrees = {}
-        writelog('Reading base features...', True)
+        writelog('Reading base features...', VERBOSE)
         getGFFFeatures(BASE_FEATURES_GFF3_FILENAME)
     
-        writelog('Reading repeat features...', True)
+        writelog('Reading repeat features...', VERBOSE)
         getGFFFeatures(REPEAT_FEATURES_GFF3_FILENAME)
     
-        writelog('Writing feature trees to disk...', True)
+        writelog('Writing feature trees to disk...', VERBOSE)
         picklediTreesDict = open(pickleName, 'wb')
         pickle.dump(iTrees, picklediTreesDict)
         picklediTreesDict.close()
@@ -132,7 +132,7 @@ def findFeaturesXML(fileName):
        Return value: absolute path of XML file augmented with features
     """
     
-    writelog('Annotating features...', True)
+    writelog('Annotating features...', VERBOSE)
     
     parser = ET.XMLParser(remove_blank_text=True)  # lxml
     tree = ET.parse(fileName, parser)
@@ -173,7 +173,7 @@ def searchiTrees(seqid, start, end):
 #    start -= FEATURE_SEARCH_DIST
 #    end += FEATURE_SEARCH_DIST
     
-    if iTrees[seqid][start:end] is None:
+    if iTrees is None or iTrees[seqid][start:end] is None:
         return []
     else:
         return [(iv.data.type, iv.data.id, iv.data.location) for iv in iTrees[seqid][start:end]]
