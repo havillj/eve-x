@@ -553,10 +553,11 @@ def drawContigs(fileName):
     
     diagramsPath = Path(fileName).parent.parent / DIAGRAMS_DIR
     
-    if not diagramsPath.exists():
-        os.mkdir(str(diagramsPath))
+    if diagramsPath.exists():
+        if len(os.listdir(diagramsPath)) > 0:
+            os.system('rm -r ' + str(diagramsPath) + '/*')
     else:
-        os.system('rm -r ' + str(diagramsPath) + '/')
+        os.system('mkdir ' + str(diagramsPath))
         
     fams = readFamFile()
     
@@ -1174,7 +1175,7 @@ def consolidateAll():
                     
         referenceFilename = FASTA_DIR + seqid + '.fasta'
         if not Path(FASTA_DIR).exists():
-            os.mkdir(FASTA_DIR)
+            os.system('mkdir ' + str(FASTA_DIR))
         refRecord = getSeqRecord(referenceFilename, seqid)
         referenceSeq = str(refRecord.seq)
         virusLength = len(referenceSeq)
@@ -1292,7 +1293,7 @@ def consolidateAll():
     # -outfmt "10 qseqid qstart qend qseq sstart send sseq evalue bitscore sseqid stitle pident"
         
     if not Path(GB_DIR).exists():
-        os.mkdir(GB_DIR)
+        os.system('mkdir ' + GB_DIR)
         
     for family in set(allFamilies):
         FAMILY_DIR = Path(VIRUS_RESULTS_DIR) / SEQUENCES_DIR / family
