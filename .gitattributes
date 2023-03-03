@@ -1,3 +1,4 @@
+*.gff3 filter=lfs diff=lfs merge=lfs -text
 *.nhr filter=lfs diff=lfs merge=lfs -text
 *.nin filter=lfs diff=lfs merge=lfs -text
 *.nsq filter=lfs diff=lfs merge=lfs -text
@@ -5,7 +6,6 @@
 *.nsd filter=lfs diff=lfs merge=lfs -text
 *.nsi filter=lfs diff=lfs merge=lfs -text
 *.fasta filter=lfs diff=lfs merge=lfs -text
-*.gff3 filter=lfs diff=lfs merge=lfs -text
 *.md filter=lfs diff=lfs merge=lfs -text
 *.pyc filter=lfs diff=lfs merge=lfs -text
 *.py filter=lfs diff=lfs merge=lfs -text
