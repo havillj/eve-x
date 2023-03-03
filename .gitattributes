@@ -1,5 +1,6 @@
 *.gff3 filter=lfs diff=lfs merge=lfs -text
 *.fasta filter=lfs diff=lfs merge=lfs -text
+*.ns* filter=lfs diff=lfs merge=lfs -text
 *.nhr filter=lfs diff=lfs merge=lfs -text
 *.nin filter=lfs diff=lfs merge=lfs -text
 *.nsq filter=lfs diff=lfs merge=lfs -text
