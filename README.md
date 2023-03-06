@@ -29,7 +29,7 @@ pip3 install --user biopython
 
 Samtools can be found [here](http://www.htslib.org).
 
-Once installed, assign the path to `samtools` to the variable `SAMTOOLS_EXEC` in `config.py`.  For example:
+Once installed, assign the path to `samtools` to the variable `SAMTOOLS_EXEC` in [config.py](python/config.py).  For example:
 
 ```
 SAMTOOLS_EXEC = '/usr/bin/samtools'
