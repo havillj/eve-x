@@ -142,7 +142,7 @@ PREFERRED_ACCS = {'Aedes anphevirus':               ['gb|MH037149.1|'],
 
 ## Parameters
 
-There are several ways to customize the execution of EVE.  These options are described in detail in the comments of [python/config.py](config.py).
+There are several ways to customize the execution of EVE.  These options are described in detail in the comments of [config.py](python/config.py).
 
 ## Usage
 
