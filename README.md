@@ -53,12 +53,13 @@ BLAST_EXEC = '/usr/local/bin/blastn'
 
 ### Directories
 
-The following three directories should be specified in `config.py`:
+The following four directories should be specified in `config.py`:
 
 ```
 ROOT_DIR = '/Volumes/Data/'              # root directory where all data files related to EVE will be located
-SPECIMENS_DIR = ROOT_DIR + 'specimens/'  # path for original specimen BAM files
-RESULTS_DIR = ROOT_DIR + 'results/'      # path for all results
+SPECIMENS_DIR = ROOT_DIR + 'specimens/'  # path to original specimen BAM files
+RESULTS_DIR = ROOT_DIR + 'results/'      # path where all results should be written
+BLASTDB_DIR = ROOT_DIR + 'blastdb/'      # path to blast databases
 ```
 
 See the [Directory structure](#directory-structure) section below for details on the contents of the `RESULTS_DIR` directory.
