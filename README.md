@@ -19,6 +19,12 @@ They should be easy to install using `pip` (or `pip3`).  For example:
 pip3 install biopython
 ```
 
+Or, if you don't have root access to your system:
+
+```
+pip3 install --user biopython
+```
+
 ### Samtools
 
 Samtools can be found [here](http://www.htslib.org).
