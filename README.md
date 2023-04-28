@@ -68,6 +68,8 @@ RESULTS_DIR = ROOT_DIR + 'results/'      # path where all results should be writ
 BLASTDB_DIR = ROOT_DIR + 'blastdb/'      # path to blast databases
 ```
 
+If you wish to test your installation, a sample *Aedes aegypti* specimen BAM file can be found [here](https://www.dropbox.com/s/0t7ovuujo0iiroi/La_Lope-Gabon-10.LIN210A1646.sorted.deduped.merged.bam?dl=0).
+
 See the [Directory structure](#directory-structure) section below for details on the contents of the `RESULTS_DIR` directory.
 
 ### BLAST databases
