@@ -310,5 +310,3 @@ Once the hits are k-means clustered, these results are written to new FASTA file
 The raw putative insertion sites are written to tab-delimited (TSV) files, one per chromosome, named `<VIRUS ACC>_insertpositions_chrX.tsv` where `X` is a chromosome number.
 
 Putative insertion positions are consolidated by groups of specimens sharing the same set of insertion sites and written to a text file named `<VIRUS ACC>_insertpositions.txt`.
-
-## XML format
