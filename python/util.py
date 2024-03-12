@@ -150,7 +150,11 @@ def getFamily(accessionID):
         writelog('Exception:', sys.exc_info()[1])
         return ''
         
-    result = bytes(result, 'utf-8')
+    try:
+        result = bytes(result, 'utf-8')
+    except:
+        pass
+        
     root = ET.fromstring(result)
     lineage = root.find('.//OrgName_lineage')
 
