@@ -6,3 +6,4 @@
 *.nog filter=lfs diff=lfs merge=lfs -text
 *.nsd filter=lfs diff=lfs merge=lfs -text
 *.nsi filter=lfs diff=lfs merge=lfs -text
+*.bam filter=lfs diff=lfs merge=lfs -text
