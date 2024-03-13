@@ -19,11 +19,17 @@ They should be easy to install using `pip` (or `pip3`).  For example:
 pip3 install biopython
 ```
 
+Or, if you don't have root access to your system:
+
+```
+pip3 install --user biopython
+```
+
 ### Samtools
 
 Samtools can be found [here](http://www.htslib.org).
 
-Once installed, assign the path to `samtools` to the variable `SAMTOOLS_EXEC` in `config.py`.  For example:
+Once installed, assign the path to `samtools` to the variable `SAMTOOLS_EXEC` in [config.py](python/config.py).  For example:
 
 ```
 SAMTOOLS_EXEC = '/usr/bin/samtools'
@@ -53,13 +59,16 @@ BLAST_EXEC = '/usr/local/bin/blastn'
 
 ### Directories
 
-The following three directories should be specified in `config.py`:
+The following four directories should be specified in `config.py`:
 
 ```
 ROOT_DIR = '/Volumes/Data/'              # root directory where all data files related to EVE will be located
-SPECIMENS_DIR = ROOT_DIR + 'specimens/'  # path for original specimen BAM files
-RESULTS_DIR = ROOT_DIR + 'results/'      # path for all results
+SPECIMENS_DIR = ROOT_DIR + 'specimens/'  # path to original specimen BAM files
+RESULTS_DIR = ROOT_DIR + 'results/'      # path where all results should be written
+BLASTDB_DIR = ROOT_DIR + 'blastdb/'      # path to blast databases
 ```
+
+If you wish to test your installation, a sample *Aedes aegypti* specimen BAM file can be found [here](https://www.dropbox.com/s/0t7ovuujo0iiroi/La_Lope-Gabon-10.LIN210A1646.sorted.deduped.merged.bam?dl=0).
 
 See the [Directory structure](#directory-structure) section below for details on the contents of the `RESULTS_DIR` directory.
 
@@ -141,7 +150,7 @@ PREFERRED_ACCS = {'Aedes anphevirus':               ['gb|MH037149.1|'],
 
 ## Parameters
 
-There are several ways to customize the execution of EVE.  These options are described in detail in the comments of [config.py](config.py).
+There are several ways to customize the execution of EVE.  These options are described in detail in the comments of [config.py](python/config.py).
 
 ## Usage
 
@@ -301,5 +310,3 @@ Once the hits are k-means clustered, these results are written to new FASTA file
 The raw putative insertion sites are written to tab-delimited (TSV) files, one per chromosome, named `<VIRUS ACC>_insertpositions_chrX.tsv` where `X` is a chromosome number.
 
 Putative insertion positions are consolidated by groups of specimens sharing the same set of insertion sites and written to a text file named `<VIRUS ACC>_insertpositions.txt`.
-
-## XML format

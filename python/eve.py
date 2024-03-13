@@ -761,7 +761,7 @@ def drawContigs(fileName):
         ax2.tick_params(axis='both', which='major', labelsize=axesFontSize)
         ax2.set_ylim(bottom = 0, top = max(aaCoverage + [1]))
         ax2.set_yticks([0, max(aaCoverage + [1]) // 2, max(aaCoverage + [1])])
-        ax2.set_ylabel('Host hits', fontsize = axesFontSize)
+        ax2.set_ylabel('Host hits', size = axesFontSize)
 
         familyDir = str(diagramsPath / family)
         if not Path(familyDir).exists():
@@ -1524,7 +1524,7 @@ def drawVirus(acc, family, hits, allSpecimens, separatePops, isFamily, showPlot,
         
         fig, ax = pyplot.subplots(numAxes, 1, sharex = False, sharey = False, figsize = (width, height), gridspec_kw = {'height_ratios': [4] + [1] * (numAxes - 1)})
         fig.subplots_adjust(top = 0.99, bottom = 0.01, left = 0.18, right = 0.95)
-        fig.suptitle(virusName, fontsize = fontsize, fontweight = 'bold', y = 0.995)
+        fig.suptitle(virusName, size = fontsize, fontweight = 'bold', y = 0.995)
         
         virusRecord.box_linewidth = 0
         virusRecord.plot(ax = ax[0], figure_width=width, draw_line = draw_line, with_ruler = with_ruler, max_line_length = 30, max_label_length = 30) # prevent multiline labels
