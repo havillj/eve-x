@@ -173,7 +173,13 @@ def searchiTrees(seqid, start, end):
 #    start -= FEATURE_SEARCH_DIST
 #    end += FEATURE_SEARCH_DIST
     
-    if iTrees is None or iTrees[seqid][start:end] is None:
+    if iTrees is None:
+        writelog('Feature interval trees not found.', VERBOSE)
+        return []
+    elif seqid not in iTrees:
+        writelog('Host sequence id "' + seqid + '" was not found in feature interval tree.\nKnown host sequence ids are ' + str(list(iTrees.keys())) + '.', VERBOSE)
+        return []
+    elif iTrees[seqid][start:end] is None:
         return []
     else:
         return [(iv.data.type, iv.data.id, iv.data.location) for iv in iTrees[seqid][start:end]]
