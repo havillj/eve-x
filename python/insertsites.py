@@ -412,7 +412,7 @@ def drawInsertSites(clusteredFileName, findFeatures, bestHitsOnly = True):
         
     minChromLength = min(CHR_LENGTHS.values())
     widthRatios = [CHR_LENGTHS[chr] / minChromLength for chr in CHR_LENGTHS]
-    fig, ax = pyplot.subplots(1, 3, sharey = True, figsize = (7, 0.045 * numRecords), gridspec_kw = {'width_ratios': widthRatios})
+    fig, ax = pyplot.subplots(1, 3, sharey = True, figsize = (7, 0.045 * (numRecords + 1)), gridspec_kw = {'width_ratios': widthRatios})
     fig.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99, wspace = 0.0)
     
     ax[0].set_yticks(range(numRecords + 1))   # leave position 0 empty for readability
