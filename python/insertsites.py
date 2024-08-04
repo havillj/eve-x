@@ -264,7 +264,7 @@ def drawInsertSites(clusteredFileName, findFeatures, bestHitsOnly = True):
     
     writelog('Consolodating insertion site data...', VERBOSE)
     
-    y = 0
+    y = 1           # leave a blank y tick
     yvalues = {}
     xvalues = {}
     ylabels  = []
@@ -414,10 +414,12 @@ def drawInsertSites(clusteredFileName, findFeatures, bestHitsOnly = True):
     widthRatios = [CHR_LENGTHS[chr] / minChromLength for chr in CHR_LENGTHS]
     fig, ax = pyplot.subplots(1, 3, sharey = True, figsize = (7, 0.045 * numRecords), gridspec_kw = {'width_ratios': widthRatios})
     fig.subplots_adjust(top = 0.97, bottom = 0.03, left = 0.25, right = 0.99, wspace = 0.0)
-    ax[0].set_yticks(range(numRecords))
-    ax[0].set_yticklabels(ylabels)
-    ax[0].set_ylim(0, numRecords)
+    
+    ax[0].set_yticks(range(numRecords + 1))   # leave position 0 empty for readability
+    ax[0].set_yticklabels([''] + ylabels)
+    ax[0].set_ylim(0, numRecords + 1)
     ax[0].invert_yaxis()
+    
     chrCount = 0
     xtickPositions = [list(range(0, CHR_LENGTHS[chr], int(1e8))) for chr in CHR_LENGTHS]
     xtickLabels = [[str(n//int(1e6))+'M' for n in range(0, CHR_LENGTHS[chr], int(1e8))] for chr in CHR_LENGTHS]
