@@ -1,10 +1,10 @@
-# EVE
+# EVE-X
 
 ## Dependencies
 
 ### Python modules
 
-EVE is written in Python 3 (version 3.6 or later) and requires the following nonstandard modules:
+EVE-X is written in Python 3 (version 3.6 or later) and requires the following nonstandard modules:
 - biopython
 - dna_features_viewer
 - intervaltree
@@ -62,7 +62,7 @@ BLAST_EXEC = '/usr/local/bin/blastn'
 The following four directories should be specified in `config.py`:
 
 ```
-ROOT_DIR = '/Volumes/Data/'              # root directory where all data files related to EVE will be located
+ROOT_DIR = '/Volumes/Data/'              # root directory where all data files related to EVE-X will be located
 SPECIMENS_DIR = ROOT_DIR + 'specimens/'  # path to original specimen BAM files
 RESULTS_DIR = ROOT_DIR + 'results/'      # path where all results should be written
 BLASTDB_DIR = ROOT_DIR + 'blastdb/'      # path to blast databases
@@ -105,7 +105,7 @@ CHR_NAMES = {'NC_035107.1': 'Chr1', 'NC_035108.1': 'Chr2', 'NC_035109.1': 'Chr3'
 
 ### Host genome features
 
-To identify repeat sequences and other genomic features near putative viral insertions, EVE needs files in GFF3 format that list these features.  For example, these files for *Aedes aegpyti* can be obtained from http://vectorbase.org ([here](https://vectorbase.org/common/downloads/release-52/AaegyptiLVP_AGWG/gff/data/VectorBase-52_AaegyptiLVP_AGWG.gff) and [here](https://vectorbase.org/common/downloads/Legacy%20VectorBase%20Files/Aedes-aegypti/Aedes-aegypti-LVP_AGWG_REPEATFEATURES_AaegL5.gff3.gz)).  Once downloaded and decompressed, add their names to the variables `BASE_FEATURES_GFF3_FILENAME` and `REPEAT_FEATURES_GFF3_FILENAME` in `config.py`.  For example:
+To identify repeat sequences and other genomic features near putative viral insertions, EVE-X needs files in GFF3 format that list these features.  For example, these files for *Aedes aegpyti* can be obtained from http://vectorbase.org ([here](https://vectorbase.org/common/downloads/release-52/AaegyptiLVP_AGWG/gff/data/VectorBase-52_AaegyptiLVP_AGWG.gff) and [here](https://vectorbase.org/common/downloads/Legacy%20VectorBase%20Files/Aedes-aegypti/Aedes-aegypti-LVP_AGWG_REPEATFEATURES_AaegL5.gff3.gz)).  Once downloaded and decompressed, add their names to the variables `BASE_FEATURES_GFF3_FILENAME` and `REPEAT_FEATURES_GFF3_FILENAME` in `config.py`.  For example:
 
 ```
 GFF3_DIR = ROOT_DIR + 'gff3/'
@@ -138,7 +138,7 @@ POPULATIONS = {'Angola': ['Angola'],
 ```
 ### Preferred virus accession numbers
 
-Since there are commonly many genomic sequences in a viral database corresponding to the same viral species, EVE only retains hits from one representative of a species in each contig.  You can optionally specify a preferred accession number for each species by editing the `PREFERRED_ACCS` variable in `config.py`.  For example:
+Since there are commonly many genomic sequences in a viral database corresponding to the same viral species, EVE-X only retains hits from one representative of a species in each contig.  You can optionally specify a preferred accession number for each species by editing the `PREFERRED_ACCS` variable in `config.py`.  For example:
 
 ```
 PREFERRED_ACCS = {'Aedes anphevirus':               ['gb|MH037149.1|'], 
@@ -150,26 +150,26 @@ PREFERRED_ACCS = {'Aedes anphevirus':               ['gb|MH037149.1|'],
 
 ## Parameters
 
-There are several ways to customize the execution of EVE.  These options are described in detail in the comments of [config.py](python/config.py).
+There are several ways to customize the execution of EVE-X.  These options are described in detail in the comments of [config.py](python/config.py).
 
 ## Usage
 
-To run EVE on the specimen files in the directory `SPECIMENS_DIR`, simply execute
+To run EVE-X on the specimen files in the directory `SPECIMENS_DIR`, simply execute
 ```
-python3 eve.py
+python3 evex.py
 ```
 
 Any of the options in the dictionary `config` in `config.py` may be specified on the command line in the form
 ```
-python3 eve.py --OPTION1=VALUE1 --OPTION2=VALUE2 ...
+python3 evex.py --OPTION1=VALUE1 --OPTION2=VALUE2 ...
 ```
 
 For example:
 ```
-python3 eve.py --DO_CLUSTERING=False --MIN_HITS_TO_SHOW_VIRUS=4
+python3 evex.py --DO_CLUSTERING=False --MIN_HITS_TO_SHOW_VIRUS=4
 ```
 
-EVE will generate many files following the directory structure in the [next section](#directory-structure).
+EVE-X will generate many files following the directory structure in the [next section](#directory-structure).
 
 If you wish, you can manually adjust any of the clustered aligned sequence files and then run
 
