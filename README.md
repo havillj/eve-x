@@ -45,6 +45,8 @@ Once installed, assign the path to `spades.py` to the variable `SPADES_EXEC` in 
 SPADES_EXEC = '/usr/local/bin/spades.py'
 ```
 
+Note that we use the `--careful` option in SPAdes, which performs additional processing to reduce the number of mismatches and assembly mistakes.  Although the SPAdes documentation recommends that this option not be used for large and medium-size eukaryotic genomes, this is due to the additional computation time required, not because it would give erroneous results.  We use it because the additional processing step gives more accurate results.
+
 ### BLAST
 
 BLAST can be downloaded [here](https://blast.ncbi.nlm.nih.gov/Blast.cgi?PAGE_TYPE=BlastDocs&DOC_TYPE=Download).
