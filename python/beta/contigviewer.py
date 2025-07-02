@@ -1,7 +1,10 @@
 import dash
-import dash_core_components as dcc
-import dash_html_components as html
+#import dash_core_components as dcc
+#import dash_html_components as html
 import dash_bootstrap_components as dbc
+from dash import dcc
+from dash import html
+#from dash import dbc
 from lxml import etree
 from matplotlib.backends.backend_pdf import PdfPages
 import io
@@ -12,7 +15,7 @@ import matplotlib
 import matplotlib.pyplot as pyplot
 matplotlib.use('Agg')
 import math
-import dash_bootstrap_components as dbc
+#import dash_bootstrap_components as dbc
 from dash.exceptions import PreventUpdate
 #from pathlib import Path
 #from util import getContig
@@ -281,7 +284,7 @@ app.layout = html.Div(
 #    html.Div(style ={'textAlign': 'center'}, children=['Contig Diagrams for EVE in AAa genome',]),
 
 #    html.P("To enable more convenient appraisal of individual contigs, EVE produces diagrams of the viral hits in each contig (only the best hit). To see different contigs containing viral hits, select a specimen and virus.",
-     style = {'textAlign': 'center'}),
+#     style = {'textAlign': 'center'}),
 
     html.Br(),
 
