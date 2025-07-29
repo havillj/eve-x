@@ -154,8 +154,13 @@ def getFamily(accessionID):
         result = bytes(result, 'utf-8')
     except:
         pass
+    
+    try:
+        root = ET.fromstring(result)
+    except:
+        writelog('Exception: improperly formed XML file encountered when querying virus family for ' + accessionID + '.')
+        return ''
         
-    root = ET.fromstring(result)
     lineage = root.find('.//OrgName_lineage')
 
     if lineage is not None:
@@ -185,25 +190,6 @@ def addFamily(acc, name):
     famFile = open(FAMILY_CSV, 'a')
     famFile.write(acc + ',' + name + '\n')
     famFile.close()
-    
-###############################################################################
-
-def writelog(message, alsoPrint = False):
-    logFile.write(message + '\n')
-    if alsoPrint:
-        print(message)
-        
-def writeConfig():
-    writelog('\nConfiguration parameters:')
-    writelog('ROOT_DIR = ' + ROOT_DIR)
-    writelog('RESULTS_DIR = ' + RESULTS_DIR)
-    writelog('SPECIMENS_DIR = ' + SPECIMENS_DIR)
-    writelog('SPECIMEN_RESULTS_DIR = ' + SPECIMEN_RESULTS_DIR)
-    writelog('HOST_DB = ' + HOST_DB)
-    writelog('VIRUS_DB = ' + VIRUS_DB)
-    for key in config:
-        writelog(key + ' = ' + str(config[key]))
-    writelog('')
         
 ###############################################################################
         

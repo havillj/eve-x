@@ -2,7 +2,8 @@ import os
 import time
 from pathlib import Path
 
-EMAIL = 'yourname@somewhere.edu' # needed to download fasta/gb files via Entrez
+#EMAIL = 'yourname@somewhere.edu' # needed to download fasta/gb files via Entrez
+EMAIL = 'jth005@bucknell.edu'
 
 MP = False                       # If True, spawn one process per specimen.
                                  # If False, specimens are analyzed sequentially.
@@ -15,12 +16,32 @@ VERBOSE = True                   # If True, print most log messages to console a
    --------------------------------
 """
 
-SPADES_EXEC = 'spades.py'                # full path to spades.py
-BLAST_EXEC = 'blastn'                    # full path to blastn
-SAMTOOLS_EXEC = 'samtools'               # full path to samtools
-ROOT_DIR = '/Volumes/Data/'              # root directory where all data files related to EVE-X will be located
-SPECIMENS_DIR = ROOT_DIR + 'specimens/'  # path to original specimen BAM files
-RESULTS_DIR = ROOT_DIR + 'results/'      # path to results
+# SPADES_EXEC = 'spades.py'                # full path to spades.py
+# BLAST_EXEC = 'blastn'                    # full path to blastn
+# SAMTOOLS_EXEC = 'samtools'               # full path to samtools
+# ROOT_DIR = '/Volumes/Data/'              # root directory where all data files related to EVE will be located
+# SPECIMENS_DIR = ROOT_DIR + 'specimens/'  # path to original specimen BAM files
+# RESULTS_DIR = ROOT_DIR + 'results/'      # path to results
+# BLASTDB_DIR = ROOT_DIR + 'blastdb/'      # path to blast databases
+
+# For bisonnet-hpc.bucknell.edu
+
+# SPADES_EXEC = '/software/apps/SPAdes/3.15.4/bin/spades.py'
+# BLAST_EXEC = '/software/apps/ncbi-blast/2.11.0+/bin/blastn'
+# SAMTOOLS_EXEC = '/software/apps/samtools/current/bin/samtools'
+# ROOT_DIR = '/home/jth005/eve/data/'       # root directory where all data files related to EVE will be located
+# SPECIMENS_DIR = ROOT_DIR + 'specimens/'   # path for original specimen BAM files
+# RESULTS_DIR = ROOT_DIR + 'results/'       # path for results
+# BLASTDB_DIR = ROOT_DIR + 'blastdb/'       # path of blast databases
+
+# For jth005-r1.bucknell.edu
+
+SPADES_EXEC = '/Volumes/Data/bin/SPAdes-3.14.1-Linux/bin/spades.py'  # full path to spades.py
+BLAST_EXEC = 'blastn'                                                # full path of blastn
+SAMTOOLS_EXEC = 'samtools'                                           # full path of samtools
+ROOT_DIR = '/Volumes/Data2/data/'             # root directory where all data files related to EVE will be located
+SPECIMENS_DIR = ROOT_DIR + 'specimens/'  # path for original specimen BAM files
+RESULTS_DIR = ROOT_DIR + 'results/'     # path for results
 BLASTDB_DIR = ROOT_DIR + 'blastdb/'      # path to blast databases
 
 """
@@ -42,7 +63,6 @@ A dictionary used in the getSpecimenLabel function to determine the
 population to which a particular specimen belongs.  If any of the strings 
 in the list corresponding to a particular key is contained in the specimen 
 name, then that key is used as the population name. 
-
 Note that the specimen number within a population is assumed to be the last
 numeric value in the BAM filename before the first period.
 """
@@ -76,7 +96,6 @@ PREFERRED_ACCS = {'Aedes anphevirus':               ['gb|MH037149.1|'],
 """ 
 Configurable variables by function
 ----------------------------------
-
     *** blastScaffolds ***
     
     EVALUE_VIRUS (floating point number)
@@ -89,25 +108,21 @@ Configurable variables by function
        this value, then the viral hit with the maximum percent identity is
        deemed to be the "best hit" in the contig.  Otherwise, the longest viral 
        hit in the contig is the "best hit."
-
     EVALUE_HOST (floating point number)
        This is the minimum e-value required for a host hit in a contig.
        
     MAX_FLANK_DISTANCE (positive integer)
        This is the maximum distance between a pair of host hits in a contig for
        them to be considered a matching pair.  Also used in getInsertSites.
-
     ALLOWED_OVERLAP (non-negative integer)
        Given a pair of host hits that are within MAX_FLANK_DISTANCE bp of 
        each other in a contig, this is the number of bp that the end of the 
        first/left hit may overlap the beginning of the second/right hit to
        be considered a matching pair.
-
     OVERLAP_FRACTION (floating point number between 0.0 and 1.0)
        If at least this fraction of a (mosaic) viral hit is overlapped by host  
        hits in a contig, then the viral hit is considered to be present in the 
        reference genome.
-
     HOST_OVERLAP_FRACTION (floating point number between 0.0 and 1.0)
        If a host hit overlaps at least this fraction of the span of a viral hit,
        then the host hit is considered to overlap the viral hit.

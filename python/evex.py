@@ -1783,9 +1783,35 @@ def processCmdLine():
                         
     return True
     
+###############################################################################
+
+def writelog(message, alsoPrint = False):
+    logFile.write(message + '\n')
+    if alsoPrint:
+        print(message)
+        
+def writeConfig():
+    writelog('\nConfiguration parameters:')
+    writelog('ROOT_DIR = ' + ROOT_DIR)
+    writelog('RESULTS_DIR = ' + RESULTS_DIR)
+    writelog('SPECIMENS_DIR = ' + SPECIMENS_DIR)
+    writelog('SPECIMEN_RESULTS_DIR = ' + SPECIMEN_RESULTS_DIR)
+    writelog('HOST_DB = ' + HOST_DB)
+    writelog('VIRUS_DB = ' + VIRUS_DB)
+    for key in config:
+        writelog(key + ' = ' + str(config[key]))
+    writelog('')
+    
+###############################################################################
+    
 def main():
     if not processCmdLine():
         exit(1)
+        
+    if not Path(LOGFILE_DIR).exists():
+        os.system('mkdir ' + LOGFILE_DIR)
+    global logFile
+    logFile = open(LOGFILE_PATH , 'w')
         
     global VERBOSE
     
@@ -1807,6 +1833,8 @@ def main():
     writelog('Starting EVE at ' + time.strftime('%c'))
     writeConfig()
     
+    exit(1)
+    
     if MP:
         VERBOSE = False
         doAllProcesses()
@@ -1815,6 +1843,8 @@ def main():
     
     consolidateAll()
     drawAll(False)
+    
+    logFile.close()
     
 main()
 
