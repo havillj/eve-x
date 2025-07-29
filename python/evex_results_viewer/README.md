@@ -9,22 +9,22 @@ EVE-X Results Viewer requires Python 3 (version 3.8 or later), and the following
 
 The additional modules can be installed using pip or pip3. For example: 
 
-'''
+```
 pip3 install pdf2image
-'''
+```
 
 ## Installing and running
 
 Copy evex_results_viewer.py to the same directory as evex.py, as it uses the same config.py file.
 
 To run EVE-X Results Viewer, run 
-'''
+```
 python3 evex_results_viewer.py
-'''
+```
 or
-'''
+```
 python3 evex_results_viewer.py -root /path/to/data
-'''
+```
 if you prefer to specify a root data directory (ROOT_DIR) other than the one specified in config.py.
 
 ## About
