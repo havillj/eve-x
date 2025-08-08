@@ -1833,8 +1833,6 @@ def main():
     writelog('Starting EVE at ' + time.strftime('%c'))
     writeConfig()
     
-    exit(1)
-    
     if MP:
         VERBOSE = False
         doAllProcesses()
